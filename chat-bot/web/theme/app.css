@@ -1,0 +1,275 @@
+/*
+ * App design tokens — customize the list page, dialogs and builder here.
+ * Chat appearance lives in theme/chatAppearance.ts (per chat bot).
+ */
+:root {
+  /* colors */
+  --app-bg: #f5f6f8;
+  --app-surface: #ffffff;
+  --app-surface-muted: #f0f1f4;
+  --app-border: #e1e4e8;
+  --app-text: #1f2328;
+  --app-text-muted: #6b7280;
+  --app-primary: #2563eb;
+  --app-primary-hover: #1d4ed8;
+  --app-primary-text: #ffffff;
+  --app-danger: #dc2626;
+  --app-danger-hover: #b91c1c;
+  --app-success: #15803d;
+  --app-success-bg: #dcfce7;
+  --app-draft: #92400e;
+  --app-draft-bg: #fef3c7;
+  --app-focus: #93c5fd;
+
+  /* typography */
+  --app-font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --app-font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+  --app-font-size: 14px;
+  --app-font-size-sm: 12px;
+  --app-font-size-lg: 18px;
+
+  /* spacing / shape */
+  --app-space-1: 4px;
+  --app-space-2: 8px;
+  --app-space-3: 12px;
+  --app-space-4: 16px;
+  --app-space-6: 24px;
+  --app-radius-sm: 6px;
+  --app-radius-md: 10px;
+  --app-shadow: 0 1px 2px rgb(0 0 0 / 6%), 0 4px 12px rgb(0 0 0 / 6%);
+  --app-shadow-lg: 0 12px 40px rgb(0 0 0 / 18%);
+
+  /* builder */
+  --builder-toolbar-height: 56px;
+  --builder-sidebar-width: 220px;
+  --builder-inspector-width: 340px;
+  --builder-canvas-bg: #eef0f3;
+  --builder-grid-color: #d5d9df;
+  --builder-group-width: 280px;
+  --builder-group-bg: #ffffff;
+  --builder-group-selected: #2563eb;
+  --builder-block-bg: #f7f8fa;
+  --builder-block-selected-bg: #eaf1ff;
+  --builder-edge-color: #8c96a3;
+  --builder-edge-hover: #2563eb;
+  --builder-port-color: #8c96a3;
+  --builder-category-bubbles: #0ea5e9;
+  --builder-category-inputs: #f97316;
+  --builder-category-logic: #8b5cf6;
+  --builder-category-integrations: #10b981;
+  --builder-category-events: #eab308;
+  --builder-category-other: #64748b;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--app-bg);
+  color: var(--app-text);
+  font-family: var(--app-font-family);
+  font-size: var(--app-font-size);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 1px;
+}
+
+/* ---- shared components ---- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--app-space-2);
+  height: 34px;
+  padding: 0 var(--app-space-3);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-surface);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) {
+  background: var(--app-surface-muted);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn--primary {
+  background: var(--app-primary);
+  border-color: var(--app-primary);
+  color: var(--app-primary-text);
+}
+.btn--primary:hover:not(:disabled) {
+  background: var(--app-primary-hover);
+}
+.btn--danger {
+  background: var(--app-danger);
+  border-color: var(--app-danger);
+  color: #fff;
+}
+.btn--danger:hover:not(:disabled) {
+  background: var(--app-danger-hover);
+}
+.btn--ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.btn--sm {
+  height: 28px;
+  padding: 0 var(--app-space-2);
+  font-size: var(--app-font-size-sm);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-1);
+  margin-bottom: var(--app-space-3);
+}
+.field__label {
+  font-size: var(--app-font-size-sm);
+  font-weight: 600;
+  color: var(--app-text-muted);
+}
+.field__hint {
+  font-size: var(--app-font-size-sm);
+  color: var(--app-text-muted);
+}
+.field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--app-space-2);
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-surface);
+}
+.textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+.input--color {
+  padding: 2px;
+  height: 34px;
+  width: 48px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--app-font-size-sm);
+  font-weight: 600;
+}
+.badge--published {
+  color: var(--app-success);
+  background: var(--app-success-bg);
+}
+.badge--draft {
+  color: var(--app-draft);
+  background: var(--app-draft-bg);
+}
+
+.alert {
+  padding: var(--app-space-3);
+  border-radius: var(--app-radius-sm);
+  background: #fef2f2;
+  color: var(--app-danger);
+  border: 1px solid #fecaca;
+}
+.alert--info {
+  background: #eff6ff;
+  color: #1e40af;
+  border-color: #bfdbfe;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--app-border);
+  border-top-color: var(--app-primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.center {
+  display: grid;
+  place-items: center;
+  height: 100%;
+}
+
+.dialog {
+  border: none;
+  border-radius: var(--app-radius-md);
+  padding: 0;
+  width: min(560px, calc(100vw - 32px));
+  box-shadow: var(--app-shadow-lg);
+  color: var(--app-text);
+}
+.dialog::backdrop {
+  background: rgb(15 23 42 / 45%);
+}
+.dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--app-space-4) var(--app-space-4) 0;
+}
+.dialog__title {
+  margin: 0;
+  font-size: var(--app-font-size-lg);
+}
+.dialog__body {
+  padding: var(--app-space-4);
+}
+.dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--app-space-2);
+  padding: 0 var(--app-space-4) var(--app-space-4);
+}
+
+.code-block {
+  margin: 0;
+  padding: var(--app-space-3);
+  border-radius: var(--app-radius-sm);
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: var(--app-font-mono);
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

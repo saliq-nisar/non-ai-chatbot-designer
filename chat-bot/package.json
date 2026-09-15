@@ -1,0 +1,40 @@
+{
+  "name": "chat-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Chat Bot builder, chat runtime, API, Web Chat and webhook worker.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false --ignore ./web --ignore ./widget server/index.ts",
+    "dev:worker": "tsx watch --clear-screen=false worker/chatWebhookWorker.ts",
+    "build": "npm run build:web && npm run build:widget && npm run build:node",
+    "build:web": "vite build",
+    "build:widget": "vite build --config vite.widget.config.ts",
+    "build:node": "node -e \"require('fs').rmSync('dist/node',{recursive:true,force:true})\" && tsc -p tsconfig.node.json",
+    "start": "node dist/node/server/index.js",
+    "start:worker": "node dist/node/worker/chatWebhookWorker.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json"
+  },
+  "dependencies": {
+    "bullmq": "^5.79.1",
+    "nodemailer": "^10.0.9",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "@types/nodemailer": "^8.0.1",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "socket.io-client": "^4.8.3",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.2"
+  }
+}
