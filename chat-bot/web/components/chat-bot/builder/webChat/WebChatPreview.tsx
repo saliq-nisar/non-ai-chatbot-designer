@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { WebChatConfig } from "../../../../../shared/webChat";
+import { appConfig } from "../../../../config";
 
 type PreviewWindow = Window & { ChatBotWebChat?: { update: (config: WebChatConfig) => void; open: () => void } };
 
 /**
  * Live preview: the real Web Chat script running on a mock website inside an iframe.
  * Every change is pushed with ChatBotWebChat.update(), so the preview matches production.
- * Conversations started here are test conversations (not recorded).
+ * Conversations started here run the saved chat bot as a test (not recorded, publishing not needed).
  */
-export const WebChatPreview = ({ publicId, config }: { publicId: string; config: WebChatConfig }) => {
+export const WebChatPreview = ({ publicId, chatBotId, config }: { publicId: string; chatBotId: string; config: WebChatConfig }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const configRef = useRef(config);
   configRef.current = config;
@@ -29,9 +30,9 @@ export const WebChatPreview = ({ publicId, config }: { publicId: string; config:
     <div class="line" style="width: 90%"></div><div class="line" style="width: 75%"></div><div class="line" style="width: 82%"></div>
     <div class="line" style="width: 60%"></div><div class="line" style="width: 70%"></div>
   </div>
-  <script src="${window.location.origin}/web-chat.js" data-chat-bot-id="${encodeURIComponent(publicId)}" data-preview="true"></script>
+  <script src="${window.location.origin}/web-chat.js" data-chat-bot-id="${encodeURIComponent(publicId)}" data-preview="true" data-preview-chat-bot-id="${encodeURIComponent(chatBotId)}"${appConfig.embedToken ? ` data-preview-token="${encodeURIComponent(appConfig.embedToken)}"` : ""}></script>
 </body></html>`,
-    [publicId],
+    [publicId, chatBotId],
   );
 
   useEffect(() => {

@@ -17,7 +17,8 @@ export const routes = {
 const parseRoute = (pathname: string): Route => {
   if (pathname === "/") return { page: "list" };
   if (pathname === "/login") return { page: "login" };
-  const builder = pathname.match(/^\/chat-bots\/([^/]+)$/);
+  // "/edit" is accepted too (used by apps that embed the builder).
+  const builder = pathname.match(/^\/chat-bots\/([^/]+)(?:\/edit)?$/);
   if (builder) return { page: "builder", chatBotId: decodeURIComponent(builder[1]!) };
   const chat = pathname.match(/^\/chat\/([^/]+)$/);
   if (chat) return { page: "chat", publicId: decodeURIComponent(chat[1]!) };

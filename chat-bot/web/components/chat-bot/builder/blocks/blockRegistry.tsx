@@ -1,3 +1,4 @@
+import { CHAT_BOT_LINK_TYPE } from "../../../../../shared/blockTypes";
 import type { ComponentType } from "react";
 import type { Block, ChatBotEvent, Item, RichTextNode } from "../../../../api/types";
 import { useVariableName } from "../inspector/fields";
@@ -59,7 +60,7 @@ const SavesTo = ({ block: b }: { block: Block }) => {
 
 const InputSummary = ({ block: b }: { block: Block }) => (
   <>
-    <Muted>{labels(b).placeholder || definitionsByType.get(b.type)?.label || b.type}</Muted> <SavesTo block={b} />
+    <Muted>{labels(b).placeholder || "Waits for the visitor's answer"}</Muted> <SavesTo block={b} />
   </>
 );
 
@@ -192,12 +193,12 @@ export const blockDefinitions: BlockDefinition[] = [
     Editor: CodeEditor,
   },
   {
-    type: "Typebot link",
+    type: CHAT_BOT_LINK_TYPE,
     label: "Chat bot link",
     category: "Logic",
-    create: () => block("Typebot link", { options: {} }),
+    create: () => block(CHAT_BOT_LINK_TYPE, { options: {} }),
     Summary: ({ block: b }) => {
-      const target = option<string>(b, "typebotId");
+      const target = option<string>(b, "chatBotId");
       return target ? <span>{target === "current" ? "Go to a group of this chat bot" : "Go to another chat bot"}</span> : <Muted>Select a chat bot…</Muted>;
     },
     Editor: ChatBotLinkEditor,

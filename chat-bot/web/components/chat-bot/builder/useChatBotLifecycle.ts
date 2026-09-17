@@ -7,7 +7,7 @@ import type { BuilderStore } from "./state/builderStore";
 
 export type BusyAction = "saving" | "publishing" | "unpublishing";
 
-/** What the builder saves through PATCH /api/v1/typebots/{id}. */
+/** What the builder saves through PATCH /api/v1/chat-bots/{id}. */
 const toUpdate = (chatBot: ChatBot): ChatBotUpdate => ({
   name: chatBot.name,
   groups: chatBot.groups,
@@ -23,7 +23,7 @@ const toUpdate = (chatBot: ChatBot): ChatBotUpdate => ({
 
 /**
  * Save / publish / unpublish. Saving is manual (explicit Save button or Ctrl+S).
- * Published state always comes from GET …/publishedTypebot after a change.
+ * Published state always comes from GET …/published after a change.
  */
 export const useChatBotLifecycle = (store: BuilderStore, initialPublished: PublishedChatBot | null) => {
   const [published, setPublished] = useState(initialPublished);

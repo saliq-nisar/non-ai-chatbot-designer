@@ -1,34 +1,36 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { ChatContext } from "../../../api/chatApi";
 import { ChatViewer } from "../viewer/ChatViewer";
-import { useBuilder } from "./state/builderStore";
-import type { ChatBotLifecycle } from "./useChatBotLifecycle";
-
-// Test conversations are not recorded and trigger no webhook.
-const TEST_CONTEXT = { mode: "test" } as const;
+import { useBuilder, useBuilderStore } from "./state/builderStore";
 
 /**
  * Test the chat bot inside the builder, with the same ChatViewer the Web Chat uses.
- * startChat runs published chat bots (by public ID), so testing needs the latest
- * changes saved and the chat bot published. Saving a published chat bot updates its
- * published version.
+ * It runs the editor's current version (unsaved and unpublished changes included).
+ * Test conversations are not recorded and trigger no webhook or email.
  */
-export const TestPanel = ({ lifecycle, onClose }: { lifecycle: ChatBotLifecycle; onClose: () => void }) => {
-  const isDirty = useBuilder((state) => state.revision !== state.savedRevision);
-  const savedRevision = useBuilder((state) => state.savedRevision);
-  const publicId = useBuilder((state) => state.chatBot.publicId);
-  const [restartCount, setRestartCount] = useState(0);
-  const { published, busy } = lifecycle;
+export const TestPanel = ({ onClose }: { onClose: () => void }) => {
+  const store = useBuilderStore();
+  const chatBotId = useBuilder((state) => state.chatBot.id);
+  const revision = useBuilder((state) => state.revision);
+  const [run, setRun] = useState(() => ({ count: 0, revision: store.getState().revision }));
 
-  let notice: { message: string; action: string; onClick: () => void } | undefined;
-  if (!published) notice = { message: "Publish the chat bot to test it.", action: "Publish", onClick: lifecycle.publish };
-  else if (isDirty) notice = { message: "Save your changes to test the latest version.", action: "Save", onClick: lifecycle.save };
+  const context = useMemo<ChatContext>(() => {
+    // The draft is read when the conversation starts, so a restart always uses the latest edits.
+    const getDraft = () => {
+      const { groups, events, edges, variables, theme, settings } = store.getState().chatBot;
+      return { groups, events, edges, variables, theme, settings };
+    };
+    return { mode: "preview", chatBotId, getDraft };
+  }, [store, chatBotId]);
+
+  const restart = () => setRun((current) => ({ count: current.count + 1, revision: store.getState().revision }));
 
   return (
     <aside className="test-panel">
       <div className="inspector__header test-panel__header">
         <h3 className="inspector__title">Test</h3>
         <div className="page__actions">
-          <button type="button" className="btn btn--sm" onClick={() => setRestartCount((n) => n + 1)} disabled={!published || !publicId}>
+          <button type="button" className="btn btn--sm" onClick={restart}>
             Restart
           </button>
           <button type="button" className="btn btn--ghost btn--sm" onClick={onClose}>
@@ -36,19 +38,17 @@ export const TestPanel = ({ lifecycle, onClose }: { lifecycle: ChatBotLifecycle;
           </button>
         </div>
       </div>
-      {notice && (
+      {revision !== run.revision && (
         <div className="alert alert--info test-panel__notice">
-          <span>{notice.message}</span>
-          <button type="button" className="btn btn--sm btn--primary" onClick={notice.onClick} disabled={!!busy}>
-            {busy ? "Working…" : notice.action}
+          <span>You changed the chat bot. Restart to test the latest version.</span>
+          <button type="button" className="btn btn--sm btn--primary" onClick={restart}>
+            Restart
           </button>
         </div>
       )}
       <div className="test-panel__chat">
-        {published && publicId && (
-          // A new key (restart or new save) starts a new session.
-          <ChatViewer key={`${savedRevision}-${restartCount}`} publicId={publicId} context={TEST_CONTEXT} />
-        )}
+        {/* A new key starts a new conversation. */}
+        <ChatViewer key={run.count} publicId="" context={context} />
       </div>
     </aside>
   );

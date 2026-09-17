@@ -5,6 +5,7 @@ import type { ViteDevServer } from "vite";
 import { serveUploadedFile } from "./api/filesApi.js";
 import { chatApiRoutes } from "./api/routes.js";
 import { config } from "./config.js";
+import { embedFrameAncestors, isEmbedApiCallAllowed, pageEmbedToken } from "./embed.js";
 import { pool } from "./db/database.js";
 import { ensureSchema } from "./db/ensureSchema.js";
 import { findRoute, HttpError, publicOrigin, readJsonObject, sendJson } from "./http.js";
@@ -45,7 +46,7 @@ const API_CORS_HEADERS = {
 };
 
 /** Browser-visible runtime configuration, injected into index.html (mirrors web/config.ts). */
-type PublicConfig = { workspaceId: string; appUrl: string };
+type PublicConfig = { workspaceId: string; appUrl: string; embedToken?: string };
 
 const start = async () => {
   await ensureSchema();
@@ -90,7 +91,8 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse, context:
     for (const [key, value] of Object.entries(API_CORS_HEADERS)) res.setHeader(key, value);
     const match = findRoute(chatApiRoutes, method, pathname);
     if (!match) return sendJson(res, 404, { message: "Not found" });
-    if (match.route.requiresAuth && !isAuthorized(req)) return sendJson(res, 401, { message: "Not signed in" });
+    if (match.route.requiresAuth && !isAuthorized(req) && !isEmbedApiCallAllowed(req, method, pathname))
+      return sendJson(res, 401, { message: "Not signed in" });
     return match.route.handler({ req, res, url, params: match.params });
   }
 
@@ -125,12 +127,14 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse, context:
 /** Every other GET renders the single-page app. Management pages require sign-in. */
 const servePage = async (req: IncomingMessage, res: ServerResponse, url: URL, { workspaceId, vite }: { workspaceId: string; vite?: ViteDevServer }) => {
   const isChatPage = url.pathname.startsWith("/chat/");
-  if (!isChatPage && url.pathname !== "/login" && !hasValidSession(req)) {
+  // Builder embedded by an allowed parent site: no sign-in, framing allowed (see server/embed.ts).
+  const embedToken = pageEmbedToken(req, url);
+  if (!isChatPage && url.pathname !== "/login" && !embedToken && !hasValidSession(req)) {
     res.writeHead(302, { Location: `/login?returnTo=${encodeURIComponent(url.pathname + url.search)}` });
     return res.end();
   }
 
-  const publicConfig: PublicConfig = { workspaceId, appUrl: publicOrigin(req) };
+  const publicConfig: PublicConfig = { workspaceId, appUrl: publicOrigin(req), ...(embedToken ? { embedToken } : {}) };
   let html = vite
     ? await vite.transformIndexHtml(url.pathname, readFileSync(join(ROOT, "web", "index.html"), "utf8"))
     : readFileSync(join(WEB_DIST, "index.html"), "utf8");
@@ -139,8 +143,8 @@ const servePage = async (req: IncomingMessage, res: ServerResponse, url: URL, { 
   res.writeHead(200, {
     "Content-Type": CONTENT_TYPES[".html"]!,
     "Cache-Control": "no-store",
-    // The chat page is embedded by the Web Chat iframe; everything else must not be framed.
-    ...(isChatPage ? {} : { "X-Frame-Options": "DENY" }),
+    // The chat page is embedded by the Web Chat iframe; the builder only by allowed parent sites; nothing else may be framed.
+    ...(isChatPage ? {} : embedToken ? { "Content-Security-Policy": `frame-ancestors ${embedFrameAncestors()}` } : { "X-Frame-Options": "DENY" }),
   });
   res.end(html);
 };

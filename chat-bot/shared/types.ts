@@ -170,6 +170,10 @@ export type ClientSideAction = {
 };
 
 export type ChatReply = {
+  /** Conversation session id (use it for continueChat, liveAgentMessage and file uploads). */
+  sessionId?: string;
+  /** Result (conversation record) id — also the live-agent room id. Absent for test conversations. */
+  resultId?: string;
   messages: ChatBubble[];
   input?: ChatInput;
   clientSideActions?: ClientSideAction[];
@@ -180,10 +184,11 @@ export type ChatReply = {
 
 export type StartChatReply = ChatReply & {
   sessionId: string;
-  resultId?: string;
   /** Live agent: token and Socket.IO host for receiving agent messages (when enabled on the server). */
   widgetSocketToken?: string;
   liveAgentSocketHost?: string;
+  /** Visitor messages after the flow reach a live agent (the chat webhook is configured). */
+  isLiveAgentEnabled?: boolean;
   chatBot: { id: string; theme: ChatBotTheme; settings: Pick<ChatBotSettings, "general" | "typingEmulation"> };
 };
 

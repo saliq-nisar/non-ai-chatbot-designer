@@ -5,7 +5,7 @@
  *
  * Adds a launcher button (and optional greeting bubble) to the page. The look and behavior
  * are designed in the builder (Web Chat designer) and loaded from
- * /api/v1/typebots/PUBLIC_ID/webChat, so changes apply without editing the website.
+ * /api/v1/chat-bots/PUBLIC_ID/webChat, so changes apply without editing the website.
  * The chat window is an iframe of /chat/PUBLIC_ID from the same server, created on first open.
  *
  * Optional attributes override the saved design: data-position="left|right",
@@ -69,6 +69,10 @@ interface Window {
 
   const appOrigin = new URL(script.src).origin;
   const isPreview = script.dataset.preview === "true";
+  /** Builder designer only: runs the saved (not necessarily published) chat bot. */
+  const previewChatBotId = isPreview ? script.dataset.previewChatBotId : undefined;
+  /** Embedded builder's designer: its signed token authorizes the preview conversation. */
+  const previewToken = isPreview ? script.dataset.previewToken : undefined;
 
   /** Attributes set on the script tag win over the saved design. */
   const withAttributeOverrides = (config: WebChatConfig): WebChatConfig => ({
@@ -146,10 +150,13 @@ interface Window {
       .greeting .dismiss { position: absolute; top: 4px; ${side}: 4px; border: 0; background: transparent; color: #6b7280; font-size: 14px; cursor: pointer; }
       @media (max-width: 480px) {
         .window { inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; border-radius: 0; }
+        /* Full-screen chat has its own close button; the launcher would cover the Send button. */
+        .launcher.is-open { display: none; }
       }
     `;
     const iconImage = button.iconUrl && isSafeImage(button.iconUrl) ? `<img src="${escapeAttribute(button.iconUrl)}" alt="" />` : chatIcon;
     launcher.innerHTML = isOpen ? closeIcon : iconImage;
+    launcher.classList.toggle("is-open", isOpen);
     launcher.style.background = isOpen ? button.backgroundColor : "";
     launcher.setAttribute("aria-label", isOpen ? "Close chat" : "Open chat");
     launcher.setAttribute("aria-expanded", String(isOpen));
@@ -185,7 +192,12 @@ interface Window {
   const setOpen = (open: boolean) => {
     if (open && !iframe) {
       iframe = document.createElement("iframe");
-      iframe.src = `${appOrigin}/chat/${encodeURIComponent(publicId)}?embed=1${isPreview ? "&preview=1" : ""}`;
+      const previewQuery = previewChatBotId
+        ? `&preview=1&chatBotId=${encodeURIComponent(previewChatBotId)}${previewToken ? `&token=${encodeURIComponent(previewToken)}` : ""}`
+        : isPreview
+          ? "&preview=1"
+          : "";
+      iframe.src = `${appOrigin}/chat/${encodeURIComponent(publicId)}?embed=1${previewQuery}`;
       iframe.title = config.header.title || "Chat";
       iframe.allow = "autoplay; clipboard-write; payment";
       iframe.addEventListener("load", sendHeaderToChat);
@@ -248,7 +260,7 @@ interface Window {
     root.append(style, chatWindow, greeting, launcher);
     document.body.appendChild(host);
     if (isPreview) return; // the builder preview sends the design with update()
-    fetch(`${appOrigin}/api/v1/typebots/${encodeURIComponent(publicId)}/webChat`)
+    fetch(`${appOrigin}/api/v1/chat-bots/${encodeURIComponent(publicId)}/webChat`)
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error(`status ${response.status}`))))
       .then((data: { config: WebChatConfig }) => instance.update(data.config))
       .catch((error) => {

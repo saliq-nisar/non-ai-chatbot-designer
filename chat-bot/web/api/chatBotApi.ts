@@ -1,41 +1,34 @@
-import { request } from "./http";
+import { authHeaders, request } from "./http";
 import type { ChatBot, ChatBotSummary, ChatBotUpdate, PublishedChatBot } from "./types";
 
-/**
- * Chat Bot management API — the existing backend endpoints, called as-is.
- * (Paths and body keys contain "typebot": they are fixed backend contracts.)
- * Requests go through this app's server, which adds the API token.
- */
+/** Chat Bot management API (/api/v1/chat-bots). */
 
-const BASE = "/api/v1/typebots";
+const BASE = "/api/v1/chat-bots";
 const path = (chatBotId: string, suffix = "") => `${BASE}/${encodeURIComponent(chatBotId)}${suffix}`;
 
 export type PublishWarning = { type: string; trademark: string };
 
 export const chatBotApi = {
   async listChatBots(workspaceId: string): Promise<ChatBotSummary[]> {
-    const { typebots } = await request<{
-      typebots: { id: string; name: string; icon: string | null; publishedTypebotId?: string }[];
-    }>(`${BASE}?workspaceId=${encodeURIComponent(workspaceId)}`);
-    return typebots.map(({ publishedTypebotId, ...summary }) => ({ ...summary, publishedChatBotId: publishedTypebotId }));
+    return (await request<{ chatBots: ChatBotSummary[] }>(`${BASE}?workspaceId=${encodeURIComponent(workspaceId)}`)).chatBots;
   },
 
   async getChatBot(chatBotId: string): Promise<ChatBot> {
-    return (await request<{ typebot: ChatBot }>(path(chatBotId))).typebot;
+    return (await request<{ chatBot: ChatBot }>(path(chatBotId))).chatBot;
   },
 
   async createChatBot(workspaceId: string, chatBot: ChatBotUpdate): Promise<ChatBot> {
-    return (await request<{ typebot: ChatBot }>(BASE, { method: "POST", body: { workspaceId, typebot: chatBot } })).typebot;
+    return (await request<{ chatBot: ChatBot }>(BASE, { method: "POST", body: { workspaceId, chatBot } })).chatBot;
   },
 
   /** `overwrite` skips the backend's conflict check (someone saved a newer version). */
   async updateChatBot(chatBotId: string, update: ChatBotUpdate, { overwrite = false } = {}): Promise<ChatBot> {
     return (
-      await request<{ typebot: ChatBot }>(path(chatBotId), {
+      await request<{ chatBot: ChatBot }>(path(chatBotId), {
         method: "PATCH",
-        body: { typebot: update, ...(overwrite ? { overwrite: true } : {}) },
+        body: { chatBot: update, ...(overwrite ? { overwrite: true } : {}) },
       })
-    ).typebot;
+    ).chatBot;
   },
 
   async deleteChatBot(chatBotId: string): Promise<void> {
@@ -44,12 +37,7 @@ export const chatBotApi = {
 
   /** Returns null when the chat bot is not published. */
   async getPublishedChatBot(chatBotId: string): Promise<PublishedChatBot | null> {
-    const { publishedTypebot } = await request<{
-      publishedTypebot: { id: string; typebotId: string; version: string; updatedAt?: string } | null;
-    }>(path(chatBotId, "/publishedTypebot"));
-    if (!publishedTypebot) return null;
-    const { typebotId, ...published } = publishedTypebot;
-    return { ...published, chatBotId: typebotId };
+    return (await request<{ publishedChatBot: PublishedChatBot | null }>(path(chatBotId, "/published"))).publishedChatBot;
   },
 
   async publishChatBot(chatBotId: string): Promise<PublishWarning[]> {
@@ -65,7 +53,7 @@ export const chatBotApi = {
   async uploadImage(chatBotId: string, file: File): Promise<string> {
     const response = await fetch(`${path(chatBotId, "/assets")}?fileName=${encodeURIComponent(file.name)}`, {
       method: "POST",
-      headers: { "Content-Type": file.type || "application/octet-stream" },
+      headers: { "Content-Type": file.type || "application/octet-stream", ...authHeaders() },
       body: file,
     });
     const data = (await response.json().catch(() => ({}))) as { url?: string; message?: string };
@@ -76,10 +64,10 @@ export const chatBotApi = {
   /** Imports an exported chat bot JSON (version 6 format). */
   async importChatBot(workspaceId: string, chatBotJson: unknown): Promise<ChatBot> {
     return (
-      await request<{ typebot: ChatBot }>(`${BASE}/import`, {
+      await request<{ chatBot: ChatBot }>(`${BASE}/import`, {
         method: "POST",
-        body: { workspaceId, typebot: chatBotJson },
+        body: { workspaceId, chatBot: chatBotJson },
       })
-    ).typebot;
+    ).chatBot;
   },
 };

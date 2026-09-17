@@ -1,7 +1,7 @@
 import type { ChatBot, ChatBotEvent, ChatBotSettings, ChatBotTheme, Edge, Group, Variable } from "../../shared/types.js";
 import { json, query, transaction } from "./database.js";
 
-/** Chat bot rows: "Typebot" (editable chat bot) and "PublicTypebot" (its published version). */
+/** Chat bots ("ChatBot") and their published versions ("PublishedChatBot"). */
 
 type ChatBotRow = {
   id: string;
@@ -33,7 +33,7 @@ export type PublishedRow = {
   version: string | null;
   createdAt: Date;
   updatedAt: Date;
-  typebotId: string;
+  chatBotId: string;
   groups: Group[];
   events: ChatBotEvent[] | null;
   variables: Variable[];
@@ -51,16 +51,16 @@ const toChatBot = (row: ChatBotRow): ChatBot => ({
 });
 
 export const listChatBots = (workspaceId: string) =>
-  query<{ id: string; name: string; icon: string | null; publishedTypebotId: string | null }>(
-    `SELECT t."id", t."name", t."icon", p."id" AS "publishedTypebotId"
-     FROM "Typebot" t LEFT JOIN "PublicTypebot" p ON p."typebotId" = t."id"
+  query<{ id: string; name: string; icon: string | null; publishedChatBotId: string | null }>(
+    `SELECT t."id", t."name", t."icon", p."id" AS "publishedChatBotId"
+     FROM "ChatBot" t LEFT JOIN "PublishedChatBot" p ON p."chatBotId" = t."id"
      WHERE t."workspaceId" = $1 AND t."isArchived" = false
      ORDER BY t."createdAt" DESC`,
     [workspaceId],
   );
 
 export const findChatBot = async (chatBotId: string) => {
-  const [row] = await query<ChatBotRow>(`SELECT * FROM "Typebot" WHERE "id" = $1 AND "isArchived" = false`, [chatBotId]);
+  const [row] = await query<ChatBotRow>(`SELECT * FROM "ChatBot" WHERE "id" = $1 AND "isArchived" = false`, [chatBotId]);
   return row ? toChatBot(row) : undefined;
 };
 
@@ -68,13 +68,13 @@ export const workspaceExists = async (workspaceId: string) =>
   (await query(`SELECT 1 FROM "Workspace" WHERE "id" = $1`, [workspaceId])).length > 0;
 
 export const isPublicIdTaken = async (publicId: string, exceptChatBotId?: string) =>
-  (await query(`SELECT 1 FROM "Typebot" WHERE "publicId" = $1 AND "id" <> $2`, [publicId, exceptChatBotId ?? ""])).length > 0;
+  (await query(`SELECT 1 FROM "ChatBot" WHERE "publicId" = $1 AND "id" <> $2`, [publicId, exceptChatBotId ?? ""])).length > 0;
 
 export type NewChatBot = Pick<ChatBot, "id" | "version" | "name" | "icon" | "groups" | "events" | "variables" | "edges" | "theme" | "settings" | "publicId" | "workspaceId">;
 
 export const insertChatBot = async (bot: NewChatBot) => {
   const [row] = await query<ChatBotRow>(
-    `INSERT INTO "Typebot" ("id", "version", "name", "icon", "groups", "events", "variables", "edges", "theme", "settings", "publicId", "workspaceId")
+    `INSERT INTO "ChatBot" ("id", "version", "name", "icon", "groups", "events", "variables", "edges", "theme", "settings", "publicId", "workspaceId")
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
     [bot.id, bot.version, bot.name, bot.icon, json(bot.groups), json(bot.events), json(bot.variables), json(bot.edges), json(bot.theme), json(bot.settings), bot.publicId, bot.workspaceId],
   );
@@ -110,11 +110,11 @@ export const updateChatBot = (chatBotId: string, changes: ChatBotChanges) =>
       sets.push(`"${column}" = $${values.length}`);
     }
     values.push(chatBotId);
-    const { rows } = await db.query<ChatBotRow>(`UPDATE "Typebot" SET ${sets.join(", ")} WHERE "id" = $${values.length} RETURNING *`, values);
+    const { rows } = await db.query<ChatBotRow>(`UPDATE "ChatBot" SET ${sets.join(", ")} WHERE "id" = $${values.length} RETURNING *`, values);
     const bot = toChatBot(rows[0]!);
     await db.query(
-      `UPDATE "PublicTypebot" SET "version" = $2, "groups" = $3, "events" = $4, "variables" = $5, "edges" = $6, "theme" = $7, "settings" = $8, "updatedAt" = now()
-       WHERE "typebotId" = $1`,
+      `UPDATE "PublishedChatBot" SET "version" = $2, "groups" = $3, "events" = $4, "variables" = $5, "edges" = $6, "theme" = $7, "settings" = $8, "updatedAt" = now()
+       WHERE "chatBotId" = $1`,
       [bot.id, bot.version, json(bot.groups), json(bot.events), json(bot.variables), json(bot.edges), json(bot.theme), json(bot.settings)],
     );
     return bot;
@@ -123,34 +123,34 @@ export const updateChatBot = (chatBotId: string, changes: ChatBotChanges) =>
 /** Soft delete like before: archived, unpublished, public ID released, results archived. */
 export const archiveChatBot = (chatBotId: string) =>
   transaction(async (db) => {
-    await db.query(`DELETE FROM "PublicTypebot" WHERE "typebotId" = $1`, [chatBotId]);
-    await db.query(`UPDATE "Result" SET "isArchived" = true WHERE "typebotId" = $1`, [chatBotId]);
-    await db.query(`UPDATE "Typebot" SET "isArchived" = true, "publicId" = NULL, "customDomain" = NULL WHERE "id" = $1`, [chatBotId]);
+    await db.query(`DELETE FROM "PublishedChatBot" WHERE "chatBotId" = $1`, [chatBotId]);
+    await db.query(`UPDATE "Result" SET "isArchived" = true WHERE "chatBotId" = $1`, [chatBotId]);
+    await db.query(`UPDATE "ChatBot" SET "isArchived" = true, "publicId" = NULL, "customDomain" = NULL WHERE "id" = $1`, [chatBotId]);
   });
 
 export const findPublishedChatBot = async (chatBotId: string) =>
-  (await query<PublishedRow>(`SELECT * FROM "PublicTypebot" WHERE "typebotId" = $1`, [chatBotId]))[0];
+  (await query<PublishedRow>(`SELECT * FROM "PublishedChatBot" WHERE "chatBotId" = $1`, [chatBotId]))[0];
 
 /** Copies the current chat bot into its published version (creates it on first publish). */
 export const publishChatBot = async (bot: ChatBot, newPublishedId: string) => {
   await query(
-    `INSERT INTO "PublicTypebot" ("id", "typebotId", "version", "groups", "events", "variables", "edges", "theme", "settings")
+    `INSERT INTO "PublishedChatBot" ("id", "chatBotId", "version", "groups", "events", "variables", "edges", "theme", "settings")
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     ON CONFLICT ("typebotId") DO UPDATE SET "version" = EXCLUDED."version", "groups" = EXCLUDED."groups", "events" = EXCLUDED."events",
+     ON CONFLICT ("chatBotId") DO UPDATE SET "version" = EXCLUDED."version", "groups" = EXCLUDED."groups", "events" = EXCLUDED."events",
        "variables" = EXCLUDED."variables", "edges" = EXCLUDED."edges", "theme" = EXCLUDED."theme", "settings" = EXCLUDED."settings", "updatedAt" = now()`,
     [newPublishedId, bot.id, bot.version, json(bot.groups), json(bot.events), json(bot.variables), json(bot.edges), json(bot.theme), json(bot.settings)],
   );
 };
 
-export const unpublishChatBot = (chatBotId: string) => query(`DELETE FROM "PublicTypebot" WHERE "typebotId" = $1`, [chatBotId]);
+export const unpublishChatBot = (chatBotId: string) => query(`DELETE FROM "PublishedChatBot" WHERE "chatBotId" = $1`, [chatBotId]);
 
 /** What the chat runtime needs to start a conversation from a public ID. */
 export const findRunnableChatBot = async (publicId: string) =>
   (
     await query<PublishedRow & { name: string; publicId: string; workspaceId: string; isArchived: boolean; isClosed: boolean; isSuspended: boolean; isQuarantined: boolean }>(
       `SELECT p.*, t."name", t."publicId", t."workspaceId", t."isArchived", t."isClosed", w."isSuspended", w."isQuarantined"
-       FROM "PublicTypebot" p
-       JOIN "Typebot" t ON t."id" = p."typebotId"
+       FROM "PublishedChatBot" p
+       JOIN "ChatBot" t ON t."id" = p."chatBotId"
        JOIN "Workspace" w ON w."id" = t."workspaceId"
        WHERE t."publicId" = $1`,
       [publicId],
@@ -158,11 +158,13 @@ export const findRunnableChatBot = async (publicId: string) =>
   )[0];
 
 /** Published versions of the given chat bots in one workspace (for "Chat bot link" blocks). */
-export const findPublishedChatBots = (chatBotIds: string[], workspaceId: string) =>
+export const findPublishedChatBots = async (chatBotIds: string[], workspaceId: string) =>
   chatBotIds.length === 0
-    ? Promise.resolve([] as PublishedRow[])
-    : query<PublishedRow>(
-        `SELECT p.* FROM "PublicTypebot" p JOIN "Typebot" t ON t."id" = p."typebotId"
-         WHERE p."typebotId" = ANY($1) AND t."workspaceId" = $2 AND t."isArchived" = false`,
-        [chatBotIds, workspaceId],
+    ? []
+    : (
+        await query<PublishedRow>(
+          `SELECT p.* FROM "PublishedChatBot" p JOIN "ChatBot" t ON t."id" = p."chatBotId"
+           WHERE p."chatBotId" = ANY($1) AND t."workspaceId" = $2 AND t."isArchived" = false`,
+          [chatBotIds, workspaceId],
+        )
       );

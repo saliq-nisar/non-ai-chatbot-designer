@@ -3,7 +3,7 @@ import { config } from "../config.js";
 
 /**
  * One connection pool for the whole server. Queries use parameters ($1, $2…) only.
- * Table and column names are the existing database's (e.g. "Typebot" stores chat bots).
+ * Tables are created by ensureSchema.ts.
  */
 // Timestamps are stored as UTC in "timestamp without time zone" columns: read and write them as UTC.
 pg.types.setTypeParser(pg.types.builtins.TIMESTAMP, (value) => new Date(`${value.replace(" ", "T")}Z`));

@@ -29,8 +29,9 @@ export type Continuation = {
 export type SessionState = {
   engine: "chat-bot/2";
   workspaceId: string;
-  publicId: string;
-  publishedChatBotId: string;
+  /** Undefined for builder previews of unpublished changes. */
+  publicId?: string;
+  publishedChatBotId?: string;
   /** Undefined for test sessions (nothing is recorded). */
   resultId?: string;
   isTest: boolean;

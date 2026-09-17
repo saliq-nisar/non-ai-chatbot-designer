@@ -9,9 +9,8 @@ import { badRequest, HttpError, isObject, notFound, publicOrigin, readJsonObject
 import { safeFileName, saveBody, uploadsRoot } from "./filesApi.js";
 
 /**
- * Chat Bot management API. Paths and JSON keys ("typebot", "typebots", "publishedTypebot")
- * are the existing API contract and stay unchanged for existing clients.
- * Authorization (session cookie or API token) is checked by the server before these run.
+ * Chat Bot management API: /api/v1/chat-bots…, JSON keys "chatBot", "chatBots", "publishedChatBot".
+ * Authorization (session cookie, API token or embed key) is checked by the server before these run.
  */
 
 const LATEST_VERSION = "6.1";
@@ -33,7 +32,7 @@ const assertWorkspace = async (workspaceId: unknown) => {
 
 /** Validates the structure of the editable fields that are present. */
 const readChatBotFields = (input: unknown): chatBots.ChatBotChanges => {
-  if (!isObject(input)) throw badRequest("`typebot` must be an object");
+  if (!isObject(input)) throw badRequest("`chatBot` must be an object");
   const changes: chatBots.ChatBotChanges = {};
   const arrayField = (key: "groups" | "edges" | "variables" | "events") => {
     if (input[key] === undefined) return;
@@ -81,12 +80,12 @@ export const chatBotRoutes: Route[] = [
   // List chat bots
   {
     method: "GET",
-    pattern: /^\/api\/v1\/typebots$/,
+    pattern: /^\/api\/v1\/chat-bots$/,
     handler: async ({ res, url }) => {
       const workspaceId = await assertWorkspace(url.searchParams.get("workspaceId"));
       const rows = await chatBots.listChatBots(workspaceId);
       sendJson(res, 200, {
-        typebots: rows.map((row) => ({ ...row, publishedTypebotId: row.publishedTypebotId ?? undefined, accessRight: "write" })),
+        chatBots: rows.map((row) => ({ ...row, publishedChatBotId: row.publishedChatBotId ?? undefined })),
       });
     },
   },
@@ -94,11 +93,11 @@ export const chatBotRoutes: Route[] = [
   // Create chat bot
   {
     method: "POST",
-    pattern: /^\/api\/v1\/typebots$/,
+    pattern: /^\/api\/v1\/chat-bots$/,
     handler: async ({ req, res }) => {
       const body = await readJsonObject(req);
       const workspaceId = await assertWorkspace(body.workspaceId);
-      const fields = readChatBotFields(body.typebot ?? {});
+      const fields = readChatBotFields(body.chatBot ?? {});
       await assertPublicIdAvailable(fields.publicId);
       const chatBot = await chatBots.insertChatBot({
         id: createId(),
@@ -114,21 +113,21 @@ export const chatBotRoutes: Route[] = [
         settings: fields.settings ?? {},
         publicId: fields.publicId ?? null,
       });
-      sendJson(res, 200, { typebot: chatBot });
+      sendJson(res, 200, { chatBot });
     },
   },
 
   // Import chat bot (exported JSON, version 6 format)
   {
     method: "POST",
-    pattern: /^\/api\/v1\/typebots\/import$/,
+    pattern: /^\/api\/v1\/chat-bots\/import$/,
     handler: async ({ req, res }) => {
       const body = await readJsonObject(req);
       const workspaceId = await assertWorkspace(body.workspaceId);
-      if (!isObject(body.typebot)) throw badRequest("`typebot` must be the exported chat bot JSON");
-      const version = String(body.typebot.version ?? "");
+      if (!isObject(body.chatBot)) throw badRequest("`chatBot` must be the exported chat bot JSON");
+      const version = String(body.chatBot.version ?? "");
       if (!SUPPORTED_VERSIONS.has(version)) throw badRequest(`Unsupported chat bot version "${version || "unknown"}". Export it in version 6 format.`);
-      const fields = readChatBotFields(body.typebot);
+      const fields = readChatBotFields(body.chatBot);
       const chatBot = await chatBots.insertChatBot({
         id: createId(),
         version,
@@ -143,40 +142,40 @@ export const chatBotRoutes: Route[] = [
         settings: fields.settings ?? {},
         publicId: null, // an import never takes over another chat bot's public ID
       });
-      sendJson(res, 200, { typebot: chatBot });
+      sendJson(res, 200, { chatBot });
     },
   },
 
   // Get chat bot
   {
     method: "GET",
-    pattern: /^\/api\/v1\/typebots\/([\w-]+)$/,
+    pattern: /^\/api\/v1\/chat-bots\/([\w-]+)$/,
     handler: async ({ res, params }) => {
-      sendJson(res, 200, { typebot: await loadChatBot(params[0]!), currentUserMode: "write" });
+      sendJson(res, 200, { chatBot: await loadChatBot(params[0]!) });
     },
   },
 
   // Update chat bot
   {
     method: "PATCH",
-    pattern: /^\/api\/v1\/typebots\/([\w-]+)$/,
+    pattern: /^\/api\/v1\/chat-bots\/([\w-]+)$/,
     handler: async ({ req, res, params }) => {
       const existing = await loadChatBot(params[0]!);
       const body = await readJsonObject(req);
-      const fields = readChatBotFields(body.typebot);
-      const clientUpdatedAt = isObject(body.typebot) && typeof body.typebot.updatedAt === "string" ? Date.parse(body.typebot.updatedAt) : NaN;
+      const fields = readChatBotFields(body.chatBot);
+      const clientUpdatedAt = isObject(body.chatBot) && typeof body.chatBot.updatedAt === "string" ? Date.parse(body.chatBot.updatedAt) : NaN;
       if (!Number.isNaN(clientUpdatedAt) && body.overwrite !== true && Date.parse(existing.updatedAt) > clientUpdatedAt + CONFLICT_MARGIN_MS)
         throw new HttpError(409, "Found newer version of the chat bot in database");
       if (fields.publicId !== existing.publicId) await assertPublicIdAvailable(fields.publicId, existing.id);
       const chatBot: ChatBot = await chatBots.updateChatBot(existing.id, fields);
-      sendJson(res, 200, { typebot: chatBot });
+      sendJson(res, 200, { chatBot });
     },
   },
 
   // Delete chat bot
   {
     method: "DELETE",
-    pattern: /^\/api\/v1\/typebots\/([\w-]+)$/,
+    pattern: /^\/api\/v1\/chat-bots\/([\w-]+)$/,
     handler: async ({ res, params }) => {
       const existing = await loadChatBot(params[0]!);
       await chatBots.archiveChatBot(existing.id);
@@ -187,18 +186,18 @@ export const chatBotRoutes: Route[] = [
   // Get published chat bot
   {
     method: "GET",
-    pattern: /^\/api\/v1\/typebots\/([\w-]+)\/publishedTypebot$/,
+    pattern: /^\/api\/v1\/chat-bots\/([\w-]+)\/published$/,
     handler: async ({ res, params }) => {
       const existing = await loadChatBot(params[0]!);
       const published = await chatBots.findPublishedChatBot(existing.id);
-      sendJson(res, 200, { publishedTypebot: published ? serializePublished(published) : null });
+      sendJson(res, 200, { publishedChatBot: published ? serializePublished(published) : null });
     },
   },
 
   // Publish chat bot
   {
     method: "POST",
-    pattern: /^\/api\/v1\/typebots\/([\w-]+)\/publish$/,
+    pattern: /^\/api\/v1\/chat-bots\/([\w-]+)\/publish$/,
     handler: async ({ res, params }) => {
       const existing = await loadChatBot(params[0]!);
       if (!SUPPORTED_VERSIONS.has(existing.version)) throw badRequest(`Chat bots in version ${existing.version} format can't be published`);
@@ -210,7 +209,7 @@ export const chatBotRoutes: Route[] = [
   // Upload an image for the chat bot (Web Chat icon, avatars, image bubbles)
   {
     method: "POST",
-    pattern: /^\/api\/v1\/typebots\/([\w-]+)\/assets$/,
+    pattern: /^\/api\/v1\/chat-bots\/([\w-]+)\/assets$/,
     handler: async ({ req, res, url, params }) => {
       const existing = await loadChatBot(params[0]!);
       const fileName = url.searchParams.get("fileName") ?? "";
@@ -226,7 +225,7 @@ export const chatBotRoutes: Route[] = [
   // Unpublish chat bot
   {
     method: "POST",
-    pattern: /^\/api\/v1\/typebots\/([\w-]+)\/unpublish$/,
+    pattern: /^\/api\/v1\/chat-bots\/([\w-]+)\/unpublish$/,
     handler: async ({ res, params }) => {
       const existing = await loadChatBot(params[0]!);
       if (!(await chatBots.findPublishedChatBot(existing.id))) throw notFound("Published chat bot not found");

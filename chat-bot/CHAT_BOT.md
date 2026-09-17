@@ -9,12 +9,12 @@ A flow-based chat bot system in one standalone Node.js project (npm): a visual *
 ```
 Browser app (React)                          Websites
  ├─ Chat Bots list + templates                └─ <script src=".../web-chat.js" data-chat-bot-id=…>
- ├─ Builder (canvas, editors, Test panel)            ├─ GET /api/v1/typebots/:publicId/webChat  (design)
+ ├─ Builder (canvas, editors, Test panel)            ├─ GET /api/v1/chat-bots/:publicId/webChat (design)
  └─ Web Chat designer (live preview)                 └─ iframe /chat/:publicId  → start/continue chat
                      │                                              │
                      ▼                                              ▼
         Chat Bot server (Node, one process) ─────────────────────────────────────
-         ├─ /api/v1/typebots…            management API (sign-in or API token)
+         ├─ /api/v1/chat-bots…           management API (sign-in or API token)
          ├─ /api/v1/credentials…         integration accounts + Google sign-in
          ├─ /api/v1/…/startChat, /continueChat, /liveAgentMessage, /files   (public)
          ├─ flow engine (server/engine)  ── services ──► HTTP requests, SMTP, Gmail,
@@ -31,7 +31,7 @@ Browser app (React)                          Websites
 
 - **One chat UI** (`ChatViewer`) serves the Test panel, the chat page and the Web Chat iframe; **one engine** (server) runs every conversation.
 - **The engine has no I/O** (`server/engine`). Integration blocks and payment intents go through injected services (`server/integrations/engineServices.ts`).
-- **Same database** as the previous system: existing chat bots, published versions, results and credentials keep working.
+- **Own database**: tables are created on first start (`server/db/ensureSchema.ts`): "ChatBot", "PublishedChatBot", "Result", "AnswerV2", "ChatSession", "Credentials", "Workspace", "User", "MemberInWorkspace".
 
 ## 2. Project structure
 
@@ -107,6 +107,7 @@ Copy `.env.example` to `.env`. Server and worker read `.env` from the directory 
 | `SAVE_WEBCHAT_CONTACT_URL` | server | no | Contact save on Web Chat start |
 | `WIDGET_JWT_SECRET`, `WIDGET_JWT_EXPIRES_IN`, `NEXT_PUBLIC_LIVE_AGENT_SOCKET_HOST` | server | no | Live-agent socket |
 | `PUBLIC_IP_LOOKUP_URL` | server | no | Public IP for LAN visitors |
+| `EMBED_ALLOWED_ORIGINS` | server | for the embedded builder | Sites allowed to show the builder in an iframe without login (comma-separated); empty = off |
 
 ## 4. Workspace seeding
 
@@ -126,25 +127,26 @@ Idempotent, deployment-safe with several instances, stable ID (stored in the dat
 
 ## 5. API endpoints
 
-Base `/api/v1`, JSON, errors `{ "message" }`. ✔ = sign-in cookie **or** `Authorization: Bearer <API_TOKEN>`. Paths and keys containing `typebot` are the existing contract.
+Base `/api/v1`, JSON, errors `{ "message" }`. ✔ = sign-in cookie **or** `Authorization: Bearer <API_TOKEN>`.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/typebots?workspaceId=` | ✔ | List chat bots |
-| GET | `/typebots/{id}` | ✔ | Get chat bot |
-| POST | `/typebots` | ✔ | Create `{ workspaceId, typebot }` |
-| PATCH | `/typebots/{id}` | ✔ | Update `{ typebot, overwrite? }` (409 on newer version) |
-| DELETE | `/typebots/{id}` | ✔ | Delete (archive) |
-| GET | `/typebots/{id}/publishedTypebot` | ✔ | Published version or `null` |
-| POST | `/typebots/{id}/publish` | ✔ | Publish |
-| POST | `/typebots/{id}/unpublish` | ✔ | Unpublish |
-| POST | `/typebots/import` | ✔ | Import a version 6/6.1 export |
-| POST | `/typebots/{id}/assets?fileName=` | ✔ | Upload an image (raw body, ≤ 2 MB) → `{ url }` |
-| POST | `/typebots/{publicId}/startChat` | – | Start `{ message?, prefilledVariables?, textBubbleContentFormat? }` |
+| GET | `/chat-bots?workspaceId=` | ✔ | List chat bots `{ chatBots }` |
+| GET | `/chat-bots/{id}` | ✔ | Get chat bot `{ chatBot }` |
+| POST | `/chat-bots` | ✔ | Create `{ workspaceId, chatBot }` |
+| PATCH | `/chat-bots/{id}` | ✔ | Update `{ chatBot, overwrite? }` (409 on newer version) |
+| DELETE | `/chat-bots/{id}` | ✔ | Delete (archive) |
+| GET | `/chat-bots/{id}/published` | ✔ | `{ publishedChatBot }` or `null` |
+| POST | `/chat-bots/{id}/publish` | ✔ | Publish |
+| POST | `/chat-bots/{id}/unpublish` | ✔ | Unpublish |
+| POST | `/chat-bots/import` | ✔ | Import a version 6/6.1 export `{ workspaceId, chatBot }` |
+| POST | `/chat-bots/{id}/assets?fileName=` | ✔ | Upload an image (raw body, ≤ 2 MB) → `{ url }` |
+| POST | `/chat-bots/{publicId}/startChat` | – | Start `{ message?, prefilledVariables?, textBubbleContentFormat? }` |
+| POST | `/chat-bots/{id}/preview/startChat` | ✔ | Test the editor's version `{ chatBot?: { groups, events, edges, variables, theme, settings } }` (not recorded) |
 | POST | `/sessions/{sessionId}/continueChat` | – | Reply `{ message?: "text" \| {type:"text",text} \| {type:"command",command} }` |
 | POST | `/sessions/{sessionId}/liveAgentMessage` | – | Free-text visitor message for the live agent `{ message }` |
 | POST | `/sessions/{sessionId}/files?fileName=` | – | Upload for the current file input (raw body) → `{ url }` |
-| GET | `/typebots/{publicId}/webChat` | – | Web Chat design `{ config }` |
+| GET | `/chat-bots/{publicId}/webChat` | – | Web Chat design `{ config }` |
 | GET | `/credentials?workspaceId=&type=` | ✔ | Accounts (`smtp`, `stripe`, `google sheets`, `gmail`), no secrets |
 | POST | `/credentials` | ✔ | Save SMTP/Stripe `{ workspaceId, type, name, data }` |
 | DELETE | `/credentials/{id}?workspaceId=` | ✔ | Remove |
@@ -156,12 +158,12 @@ Base `/api/v1`, JSON, errors `{ "message" }`. ✔ = sign-in cookie **or** `Autho
 
 | Action | In the app | API |
 |---|---|---|
-| List | Home | `GET /typebots` |
-| Create blank | **Create chat bot → Start from scratch** | `POST /typebots` |
-| Create from template | **Create chat bot → pick a template** | `POST /typebots/import` with the template JSON |
+| List | Home | `GET /chat-bots` |
+| Create blank | **Create chat bot → Start from scratch** | `POST /chat-bots` |
+| Create from template | **Create chat bot → pick a template** | `POST /chat-bots/import` with the template JSON |
 | Edit / save | Builder, **Save** or Ctrl/⌘+S (manual save, conflict detection) | `PATCH` |
 | Delete | **Delete** + confirmation | `DELETE` |
-| Import | **Import** (JSON export v6) | `POST /typebots/import` |
+| Import | **Import** (JSON export v6) | `POST /chat-bots/import` |
 
 Built-in templates (`web/templates`): Lead Generation, Lead Scoring, Product Recommendation, Insurance Offer, Customer Support, FAQ, NPS Survey, User Onboarding. Add one: drop an export JSON in the folder and add an entry to `web/templates/index.ts`.
 
@@ -171,7 +173,9 @@ Built-in templates (`web/templates`): Lead Generation, Lead Scoring, Product Rec
 
 ## 9. Testing
 
-**Test** opens the Test panel (same chat UI). It runs the published version; it asks to publish/save first when needed. Test conversations (`X-Chat-Bot-Mode: test`, signed-in only) are not recorded, send no webhook/emails, use Stripe **test** keys, and return execution logs.
+**Test** opens the Test panel (same chat UI). It runs the chat bot **as currently shown in the editor** — unsaved and unpublished changes included (`POST /chat-bots/{id}/preview/startChat`). Clicking a block during a test opens its editor and keeps the conversation; after an edit the panel offers **Restart** to test the latest version. Test conversations are not recorded, send no webhook/emails, use Stripe **test** keys, open redirects in a new tab, and return execution logs.
+
+The Web Chat designer's preview runs the last **saved** version the same way, so the conversation can be tried before publishing.
 
 ## 10. Web Chat
 
@@ -197,7 +201,7 @@ Toolbar → **Web Chat** opens the designer: settings on the left, a **live prev
 
 Paste before `</body>`. The designer shows the code with a **Copy code** button once the bot is published. Optional attributes still override the design (`data-position`, `data-button-color`, `data-icon-color`, `data-title`, `data-open="true"`), and `window.ChatBotWebChat.open() / close() / toggle() / update(config)` control it from code.
 
-How it works: Shadow-DOM launcher (host styles can't break it), design from `GET /typebots/{publicId}/webChat`, chat iframe created on first open, header design sent to the iframe with `postMessage`, never initialized twice, full screen under 480 px. Allowed origins (`settings.security.allowedOrigins`) are enforced. Analytics/Chatwoot/"run on website" code blocks run on the host page.
+How it works: Shadow-DOM launcher (host styles can't break it), design from `GET /chat-bots/{publicId}/webChat`, chat iframe created on first open, header design sent to the iframe with `postMessage`, never initialized twice, full screen under 480 px. Allowed origins (`settings.security.allowedOrigins`) are enforced. Analytics/Chatwoot/"run on website" code blocks run on the host page.
 
 Web Chat conversations also queue **webhook jobs**, **save the contact** (`SAVE_WEBCHAT_CONTACT_URL`) and return a **live-agent token** (see §11).
 
@@ -207,7 +211,7 @@ Web Chat conversations also queue **webhook jobs**, **save the contact** (`SAVE_
 - Typing emulation, retry on network errors, cancellation on unmount.
 - Inputs: text, number, email, URL, phone, date/range, time, buttons (single/multiple), pictures, rating, **file upload** (drag & drop, type filter, optional skip), **Stripe payment** (Stripe Payment Element, loaded on demand), **cards** (image/title/description/buttons).
 - Client actions: wait, redirect, and scripts (Code, Google Analytics, Meta Pixel, Chatwoot).
-- **Live agent hand-off**: when the flow ends, or when an agent message arrives on the live-agent socket, a free-text box replaces the bot inputs. Messages appear in the chat and go to `POST /sessions/{id}/liveAgentMessage`, which queues them for `CHAT_WEBHOOK_URL` with `isBotActivated: false`. Agent replies pushed by your Socket.IO server (`receiveMessage` with `{ message }`) appear as bot messages.
+- **Live agent hand-off**: when the flow ends (only if `CHAT_WEBHOOK_URL` is configured, so messages reach someone), or when an agent message arrives on the live-agent socket, a free-text box replaces the bot inputs. Messages appear in the chat and go to `POST /sessions/{id}/liveAgentMessage`, which queues them for `CHAT_WEBHOOK_URL` with `isBotActivated: false`. Agent replies pushed by your Socket.IO server (`receiveMessage` with `{ message }`) appear as bot messages.
 
 ## 12. Builder
 
@@ -218,7 +222,9 @@ Palette sections: **Bubbles** (text, image, video, audio, embed) · **Inputs** (
 - Accounts: SMTP and Stripe via an **Add** form; Google Sheets and Gmail via **Connect** (Google sign-in; save changes first). Secrets are encrypted and never shown again.
 - Cards have one port per button; buttons/conditions/A-B paths each connect to their own group.
 - State: one store per bot (`builder/state`), reducer keeps edges consistent (one edge per port, removed with their blocks/items/buttons/events), slice subscriptions, pan/zoom without re-render.
-- Keyboard: Ctrl/⌘+S save, Delete/Backspace removes selected block/group/connection/event.
+- Keyboard: Ctrl/⌘+S save, Ctrl/⌘+Z undo, Ctrl/⌘+Shift+Z or Ctrl+Y redo (also toolbar ↶ ↷; typing in one field or dragging one node is one step), Delete/Backspace removes selected block/group/connection/event.
+- New blocks open their editor right away; the first block of a new chat bot is connected to Start automatically.
+- **Fit view** shows the whole flow; large chat bots open readable at their start.
 
 ## 13. Flow engine rules
 
@@ -268,6 +274,25 @@ NODE_ENV=production npm run start:worker    # one instance
 
 Checklist: `NODE_ENV=production`; `CHAT_BOT_PUBLIC_URL=https://…`; `ENCRYPTION_SECRET` set once and backed up; `UPLOADS_DIR` on persistent, backed-up storage (shared between instances if you run several); Google OAuth redirect URI `<public URL>/api/v1/credentials/oauth/callback`; reverse proxy forwards `Host`, `X-Forwarded-Proto`, overwrites `X-Forwarded-For`, allows request bodies ≥ 10 MB for uploads; `/health` for health checks. Redeploy: `git pull && npm ci && npm run build && pm2 restart all`.
 
+## 17a. Embedding the builder in another app
+
+An allowed site can show the builder for one chat bot in an iframe, without the login page:
+
+```html
+<iframe src="https://chat.example.com/chat-bots/CHAT_BOT_ID/edit?embed=true" style="width:100%;height:100vh;border:0"></iframe>
+```
+
+1. Set `EMBED_ALLOWED_ORIGINS` to the exact origin(s) of the page containing the iframe, e.g. `https://app.example.com` (comma-separated; `http://localhost:5501` and `http://127.0.0.1:5501` are different origins). Restart the server. Empty = embedding off.
+2. Use the iframe above. Nothing else is needed on the parent site.
+
+How it works: the server checks the iframe request's `Referer` (the parent page) against the list, then serves the builder with `Content-Security-Policy: frame-ancestors <EMBED_ALLOWED_ORIGINS>`, so browsers only show it on those sites. The page gets an internal key for that chat bot (8 hours; reloading the parent page gives a new one) which its API calls send in `X-Chat-Bot-Embed-Token`.
+
+**Security:** browsers can't fake the `Referer`, but scripts can. Anyone who knows a chat bot's id and an allowed origin can open and edit that chat bot. Keep chat bot ids private, or re-enable the signed-token mode (the parent backend signs `{ chatBotId, exp }` with `EMBED_TOKEN_SECRET`; the code is kept, commented out, in `server/embed.ts` and `server/config.ts`).
+
+**Allowed in the embedded builder** (only its chat bot): edit, save, test, publish/unpublish, upload images, Web Chat designer and preview, list other chat bots' names (Chat bot link block), select/add SMTP or Stripe accounts. **Not allowed:** other chat bots' content, deleting or importing chat bots, removing accounts, connecting Google accounts (done in the main app). The back-to-list button is hidden.
+
+If the parent page sets `<meta name="referrer" content="no-referrer">` (or `referrerpolicy="no-referrer"` on the iframe), no `Referer` is sent and the login page appears — keep the default referrer policy.
+
 ## 18. Customization
 
 | To change | Edit |
@@ -287,6 +312,13 @@ Checklist: `NODE_ENV=production`; `CHAT_BOT_PUBLIC_URL=https://…`; `ENCRYPTION
 New block end-to-end: registry entry + editor → engine (`INPUT_TYPES`/`LOGIC_TYPES` + `executeLogic`, or `INTEGRATION_TYPES` + `engineServices`) → input renderer if it's an input.
 
 ## 19. Troubleshooting
+
+| Embedded builder symptom | Fix |
+|---|---|
+| Iframe shows the sign-in page | URL missing `?embed=true`, parent origin not exactly in `EMBED_ALLOWED_ORIGINS` (check `localhost` vs `127.0.0.1`, port, http/https), server not restarted, or the parent page sends no `Referer` |
+| Iframe blank / "refused to connect" | Parent site not in `EMBED_ALLOWED_ORIGINS` |
+| "Your editing session has expired" | The page was open more than 8 hours: reload the parent page |
+
 
 | Symptom | Fix |
 |---|---|

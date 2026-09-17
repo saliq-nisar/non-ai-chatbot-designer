@@ -158,9 +158,15 @@ textarea {
   color: var(--app-text-muted);
 }
 .field--inline {
+  display: flex;
   flex-direction: row;
   align-items: center;
   gap: var(--app-space-2);
+}
+
+.field--inline > .input {
+  flex: 1;
+  min-width: 0;
 }
 
 .input,

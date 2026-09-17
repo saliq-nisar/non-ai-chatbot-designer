@@ -28,19 +28,36 @@ export const inputRenderers: Record<string, ComponentType<InputProps>> = {
   cards: CardsInput,
 };
 
-export const ChatInputArea = ({ session }: { session: ChatSession }) => {
+export const ChatInputArea = ({ session, onRestart }: { session: ChatSession; onRestart: () => void }) => {
   const input = useChatState(session, (state) => state.input);
   const status = useChatState(session, (state) => state.status);
   const error = useChatState(session, (state) => state.error);
+  const canRetry = useChatState(session, (state) => state.canRetry !== false);
+  const hasMessages = useChatState(session, (state) => state.entries.length > 0);
   const isLiveAgentMode = useChatState(session, (state) => state.isLiveAgentMode);
+
+  // Nothing to show and nothing to retry (e.g. unknown or closed chat bot): a centered notice.
+  if (status === "error" && !canRetry && !hasMessages)
+    return (
+      <div className="chat__unavailable" role="alert">
+        <strong>{chatText.unavailable}</strong>
+        <span>{error}</span>
+      </div>
+    );
 
   if (status === "error")
     return (
       <div className="chat__footer chat__status chat__status--error" role="alert">
         <span>{error}</span>
-        <button type="button" className="chat__button" onClick={session.retry}>
-          {chatText.retry}
-        </button>
+        {canRetry ? (
+          <button type="button" className="chat__button" onClick={session.retry}>
+            {chatText.retry}
+          </button>
+        ) : (
+          <button type="button" className="chat__button" onClick={onRestart}>
+            {chatText.restart}
+          </button>
+        )}
       </div>
     );
 

@@ -18,6 +18,10 @@ const required = (name: string, fallbackName?: string) => {
 
 const withoutTrailingSlash = (url: string) => url.replace(/\/+$/, "");
 
+// Signed-token mode for the embedded builder (disabled, see server/embed.ts):
+// const embedTokenSecret = read("EMBED_TOKEN_SECRET");
+// if (embedTokenSecret && embedTokenSecret.length < 32) throw new Error("EMBED_TOKEN_SECRET must be at least 32 characters.");
+
 const sessionSecret = required("NEXTAUTH_SECRET");
 if (sessionSecret.length < 32) throw new Error("NEXTAUTH_SECRET must be at least 32 characters.");
 
@@ -45,6 +49,11 @@ export const config = {
     jwtSecret: read("WIDGET_JWT_SECRET"),
     jwtExpiresIn: read("WIDGET_JWT_EXPIRES_IN") ?? "24h",
     socketHost: read("NEXT_PUBLIC_LIVE_AGENT_SOCKET_HOST"),
+  },
+  /** Builder embedded in another app, allowed for these parent sites (see server/embed.ts). */
+  embed: {
+    // tokenSecret: read("EMBED_TOKEN_SECRET"), // signed-token mode (disabled)
+    allowedOrigins: (read("EMBED_ALLOWED_ORIGINS") ?? "").split(",").map((origin) => withoutTrailingSlash(origin.trim())).filter(Boolean),
   },
   publicIpLookupUrl: read("PUBLIC_IP_LOOKUP_URL") ?? "https://api.ipify.org?format=json",
   /** 32 characters. Encrypts saved integration credentials (SMTP, Stripe, Google). */

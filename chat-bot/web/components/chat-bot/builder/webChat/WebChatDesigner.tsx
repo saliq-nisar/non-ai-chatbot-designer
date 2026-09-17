@@ -142,9 +142,9 @@ export const WebChatDesigner = ({ lifecycle, onClose }: { lifecycle: ChatBotLife
 
         <div className="webchat-designer__side">
           <div className="webchat-designer__preview">
-            <WebChatPreview publicId={publicId ?? "preview"} config={config} />
+            <WebChatPreview publicId={publicId ?? "preview"} chatBotId={chatBotId} config={config} />
           </div>
-          {!published && <p className="alert alert--info">The preview shows the design. Publish the chat bot to try the conversation here.</p>}
+          <p className="field__hint">Click the button in the preview to try the conversation (your last saved version).</p>
 
           <section className="webchat-install">
             <h3>Add it to your website</h3>

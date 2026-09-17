@@ -6,7 +6,7 @@ import { BlockPalette } from "./BlockPalette";
 import { BuilderToolbar } from "./BuilderToolbar";
 import { BuilderCanvas } from "./canvas/BuilderCanvas";
 import { Inspector } from "./inspector/Inspector";
-import { BuilderStoreProvider, createBuilderStore } from "./state/builderStore";
+import { BuilderStoreProvider, createBuilderStore, useBuilder } from "./state/builderStore";
 import { TestPanel } from "./TestPanel";
 import { useChatBotLifecycle } from "./useChatBotLifecycle";
 import { WebChatDesigner } from "./webChat/WebChatDesigner";
@@ -32,7 +32,11 @@ export const ChatBotBuilder = ({ chatBot, published }: Props) => {
   return (
     <BuilderStoreProvider store={store}>
       <div className="builder">
-        <BuilderToolbar lifecycle={lifecycle} onTest={() => setIsTestOpen(true)} onWebChat={() => setIsWebChatOpen(true)} />
+        <BuilderToolbar lifecycle={lifecycle} onTest={() => {
+            // The test is shown right away (an open editor would cover it).
+            store.dispatch({ type: "select", selection: undefined });
+            setIsTestOpen(true);
+          }} onWebChat={() => setIsWebChatOpen(true)} />
         {connectionError && (
           <div className="alert builder__alert" role="alert">
             Account not connected: {connectionError}
@@ -49,7 +53,7 @@ export const ChatBotBuilder = ({ chatBot, published }: Props) => {
         <div className="builder__body">
           <BlockPalette />
           <BuilderCanvas />
-          {isTestOpen ? <TestPanel lifecycle={lifecycle} onClose={() => setIsTestOpen(false)} /> : <Inspector />}
+          <SidePanel isTestOpen={isTestOpen} onCloseTest={() => setIsTestOpen(false)} />
         </div>
       </div>
 
@@ -81,10 +85,28 @@ export const ChatBotBuilder = ({ chatBot, published }: Props) => {
   );
 };
 
+/**
+ * Right panel: the Test chat while testing, the editor of the selected item otherwise.
+ * Selecting something during a test opens its editor and keeps the conversation (hidden);
+ * closing the editor brings the test back.
+ */
+const SidePanel = ({ isTestOpen, onCloseTest }: { isTestOpen: boolean; onCloseTest: () => void }) => {
+  const hasSelection = useBuilder((state) => state.selection !== undefined);
+  if (!isTestOpen) return <Inspector />;
+  return (
+    <>
+      {hasSelection && <Inspector />}
+      <div className="builder__test-slot" hidden={hasSelection}>
+        <TestPanel onClose={onCloseTest} />
+      </div>
+    </>
+  );
+};
+
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 
-/** Ctrl/⌘+S saves; Delete/Backspace removes the selected block, group or connection. */
+/** Ctrl/⌘+S saves; Ctrl/⌘+Z undoes, Ctrl/⌘+Shift+Z or Ctrl+Y redoes; Delete/Backspace removes the selection. */
 const useKeyboardShortcuts = (store: ReturnType<typeof createBuilderStore>, save: () => void) => {
   // Latest save function without re-registering the listener on every render.
   const saveRef = useRef(save);
@@ -94,6 +116,13 @@ const useKeyboardShortcuts = (store: ReturnType<typeof createBuilderStore>, save
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
         saveRef.current();
+        return;
+      }
+      const key = event.key.toLowerCase();
+      // Inside text fields the browser's own undo applies.
+      if ((event.ctrlKey || event.metaKey) && (key === "z" || key === "y") && !isTyping(event.target) && !document.querySelector("dialog[open]")) {
+        event.preventDefault();
+        store.dispatch({ type: key === "y" || event.shiftKey ? "redo" : "undo" });
         return;
       }
       if ((event.key !== "Delete" && event.key !== "Backspace") || isTyping(event.target) || document.querySelector("dialog[open]")) return;

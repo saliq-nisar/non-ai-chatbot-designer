@@ -24,6 +24,8 @@ export type BuilderState = {
   /** Incremented on every content change; compared with savedRevision to know if there are unsaved changes. */
   revision: number;
   savedRevision: number;
+  /** Undo/redo history of chat bot versions (newest last in `past`). */
+  history: { past: ChatBot[]; future: ChatBot[]; lastKey?: string };
 };
 
 export type BuilderAction =
@@ -49,9 +51,13 @@ export type BuilderAction =
   | { type: "updateTheme"; theme: ChatBotTheme }
   | { type: "updateSettings"; settings: ChatBotSettings }
   | { type: "setPublicId"; publicId: string | null }
-  | { type: "saved"; revision: number; updatedAt: string; publicId: string | null };
+  | { type: "saved"; revision: number; updatedAt: string; publicId: string | null }
+  | { type: "undo" }
+  | { type: "redo" };
 
-export const createBuilderState = (chatBot: ChatBot): BuilderState => ({ chatBot, revision: 0, savedRevision: 0 });
+const MAX_HISTORY = 100;
+
+export const createBuilderState = (chatBot: ChatBot): BuilderState => ({ chatBot, revision: 0, savedRevision: 0, history: { past: [], future: [] } });
 
 export const builderReducer = (state: BuilderState, action: BuilderAction): BuilderState => {
   switch (action.type) {
@@ -63,11 +69,83 @@ export const builderReducer = (state: BuilderState, action: BuilderAction): Buil
         savedRevision: action.revision,
         chatBot: { ...state.chatBot, updatedAt: action.updatedAt, publicId: action.publicId },
       };
+    case "undo":
+    case "redo": {
+      const { past, future } = state.history;
+      const target = action.type === "undo" ? past.at(-1) : future.at(-1);
+      if (!target) return state;
+      // The saved version marker (updatedAt) always stays current, so saving after an undo doesn't conflict.
+      const chatBot = { ...target, updatedAt: state.chatBot.updatedAt };
+      return {
+        ...state,
+        chatBot,
+        revision: state.revision + 1,
+        selection: isSelectionValid(chatBot, state.selection) ? state.selection : undefined,
+        history:
+          action.type === "undo"
+            ? { past: past.slice(0, -1), future: [...future, state.chatBot] }
+            : { past: [...past, state.chatBot], future: future.slice(0, -1) },
+      };
+    }
     default: {
       const chatBot = applyChange(state.chatBot, action);
       if (chatBot === state.chatBot) return state;
-      return { ...state, chatBot, revision: state.revision + 1, selection: nextSelection(state.selection, action) };
+      // Consecutive edits of the same thing (typing in one field, dragging one node) are one undo step.
+      const key = historyKey(action);
+      const { past, lastKey } = state.history;
+      const isSameStep = key !== undefined && key === lastKey && past.length > 0;
+      return {
+        ...state,
+        chatBot,
+        revision: state.revision + 1,
+        selection: action.type === "addGroup" ? blockSelection(chatBot, action.block.id) : nextSelection(state.selection, action),
+        history: { past: isSameStep ? past : [...past, state.chatBot].slice(-MAX_HISTORY), future: [], lastKey: key },
+      };
     }
+  }
+};
+
+const historyKey = (action: BuilderAction): string | undefined => {
+  switch (action.type) {
+    case "rename":
+      return "rename";
+    case "moveNode":
+      return `move:${action.nodeId}`;
+    case "renameGroup":
+      return `group:${action.groupId}`;
+    case "updateBlock":
+      return `block:${action.block.id}`;
+    case "updateEvent":
+      return `event:${action.event.id}`;
+    case "renameVariable":
+      return `variable:${action.variableId}`;
+    case "updateTheme":
+      return "theme";
+    case "updateSettings":
+      return "settings";
+    case "setPublicId":
+      return "publicId";
+    default:
+      return undefined;
+  }
+};
+
+const blockSelection = (bot: ChatBot, blockId: string): Selection | undefined => {
+  const group = bot.groups.find((g) => g.blocks.some((block) => block.id === blockId));
+  return group ? { kind: "block", groupId: group.id, blockId } : undefined;
+};
+
+const isSelectionValid = (bot: ChatBot, selection: Selection | undefined) => {
+  if (!selection) return false;
+  switch (selection.kind) {
+    case "group":
+      return bot.groups.some((group) => group.id === selection.groupId);
+    case "block":
+      return bot.groups.some((group) => group.id === selection.groupId && group.blocks.some((block) => block.id === selection.blockId));
+    case "edge":
+      return bot.edges.some((edge) => edge.id === selection.edgeId);
+    case "event":
+      return bot.events.some((event) => event.id === selection.eventId);
   }
 };
 
@@ -91,7 +169,12 @@ const applyChange = (bot: ChatBot, action: BuilderAction): ChatBot => {
         graphCoordinates: action.position,
         blocks: [action.block],
       };
-      return { ...bot, groups: [...bot.groups, group] };
+      const withGroup = { ...bot, groups: [...bot.groups, group] };
+      // The first group of a new chat bot is connected to Start, so it runs right away.
+      const start = bot.events.find((event) => event.type === "start");
+      if (bot.groups.length === 0 && start && !start.outgoingEdgeId)
+        return applyChange(withGroup, { type: "connect", source: { eventId: start.id }, groupId: group.id });
+      return withGroup;
     }
 
     case "renameGroup":
@@ -223,7 +306,6 @@ const applyChange = (bot: ChatBot, action: BuilderAction): ChatBot => {
 };
 
 const nextSelection = (selection: Selection | undefined, action: BuilderAction): Selection | undefined => {
-  if (action.type === "addGroup") return undefined;
   if (!selection) return selection;
   if (action.type === "deleteGroup" && "groupId" in selection && selection.groupId === action.groupId) return undefined;
   if (action.type === "deleteBlock" && selection.kind === "block" && selection.blockId === action.blockId) return undefined;

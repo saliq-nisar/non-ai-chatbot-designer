@@ -263,7 +263,7 @@ type ChatBotOption = { id: string; name: string };
 export const ChatBotLinkEditor = ({ block, onChange }: BlockEditorProps) => {
   const currentId = useBuilder((state) => state.chatBot.id);
   const currentGroups = useGroupOptions();
-  const linked = option<string>(block, "typebotId");
+  const linked = option<string>(block, "chatBotId");
   const [chatBots, setChatBots] = useState<ChatBotOption[]>();
   const [linkedGroups, setLinkedGroups] = useState<{ value: string; label: string }[]>();
 
@@ -292,7 +292,7 @@ export const ChatBotLinkEditor = ({ block, onChange }: BlockEditorProps) => {
         label="Chat bot"
         value={linked ?? ""}
         options={[{ value: "", label: "— select —" }, { value: "current", label: "This chat bot" }, ...(chatBots ?? []).map((bot) => ({ value: bot.id, label: bot.name }))]}
-        onChange={(typebotId) => onChange(withOptions(block, { typebotId, groupId: undefined }))}
+        onChange={(chatBotId) => onChange(withOptions(block, { chatBotId, groupId: undefined }))}
       />
       {groups && (
         <SelectField

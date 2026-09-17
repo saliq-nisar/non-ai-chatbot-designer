@@ -1,3 +1,4 @@
+import { appConfig } from "../../../config";
 import { navigate, routes } from "../../../router";
 import { useBuilder, useBuilderDispatch } from "./state/builderStore";
 import type { ChatBotLifecycle } from "./useChatBotLifecycle";
@@ -12,6 +13,8 @@ export const BuilderToolbar = ({ lifecycle, onTest, onWebChat }: Props) => {
   const dispatch = useBuilderDispatch();
   const name = useBuilder((state) => state.chatBot.name);
   const isDirty = useBuilder((state) => state.revision !== state.savedRevision);
+  const canUndo = useBuilder((state) => state.history.past.length > 0);
+  const canRedo = useBuilder((state) => state.history.future.length > 0);
   const { published, busy } = lifecycle;
 
   const goBack = () => {
@@ -22,9 +25,12 @@ export const BuilderToolbar = ({ lifecycle, onTest, onWebChat }: Props) => {
   return (
     <header className="toolbar">
       <div className="toolbar__group">
-        <button type="button" className="btn btn--ghost" onClick={goBack} aria-label="Back to chat bots">
-          ←
-        </button>
+        {/* Embedded in another app: there is no chat bot list to go back to. */}
+        {!appConfig.embedToken && (
+          <button type="button" className="btn btn--ghost" onClick={goBack} aria-label="Back to chat bots">
+            ←
+          </button>
+        )}
         <input
           className="input toolbar__name"
           aria-label="Chat bot name"
@@ -36,6 +42,12 @@ export const BuilderToolbar = ({ lifecycle, onTest, onWebChat }: Props) => {
       </div>
 
       <div className="toolbar__group">
+        <button type="button" className="btn btn--ghost" onClick={() => dispatch({ type: "undo" })} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
+          ↶
+        </button>
+        <button type="button" className="btn btn--ghost" onClick={() => dispatch({ type: "redo" })} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
+          ↷
+        </button>
         <button type="button" className="btn" onClick={lifecycle.save} disabled={!isDirty || !!busy} title="Ctrl+S">
           Save
         </button>

@@ -7,7 +7,7 @@ import { EdgeLayer, edgePath } from "./EdgeLayer";
 import { GroupNode } from "./GroupNode";
 import { EventNodes } from "./EventNodes";
 
-const MIN_ZOOM = 0.3;
+const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 1.6;
 const GRID_SIZE = 20;
 
@@ -47,6 +47,41 @@ export const BuilderCanvas = () => {
     applyViewport();
   };
 
+  /**
+   * Zooms and pans so every node is visible (never zooms in past 100%).
+   * With `minReadableZoom`, the view is left unchanged when fitting would make it smaller than that.
+   */
+  const fitView = (minReadableZoom = 0) => {
+    const canvas = canvasRef.current;
+    const nodes = contentRef.current?.querySelectorAll<HTMLElement>(".group-node, .start-node");
+    if (!canvas || !nodes?.length) return;
+    const { chatBot } = store.getState();
+    const positions = new Map([...chatBot.groups, ...chatBot.events].map((node) => [node.id, node.graphCoordinates]));
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    nodes.forEach((element) => {
+      const id = element.dataset.groupId ?? element.dataset.eventId;
+      const position = id ? positions.get(id) : undefined;
+      if (!position) return;
+      minX = Math.min(minX, position.x);
+      minY = Math.min(minY, position.y);
+      maxX = Math.max(maxX, position.x + element.offsetWidth);
+      maxY = Math.max(maxY, position.y + element.offsetHeight);
+    });
+    if (!Number.isFinite(minX)) return;
+    const padding = 48;
+    const width = canvas.clientWidth - padding * 2;
+    const height = canvas.clientHeight - padding * 2;
+    const zoom = Math.min(1, Math.max(MIN_ZOOM, Math.min(width / (maxX - minX), height / (maxY - minY))));
+    if (zoom < minReadableZoom) return;
+    // Centered when it fits; otherwise aligned to the top-left so the flow's beginning is visible.
+    viewport.current = {
+      zoom,
+      x: padding + Math.max(0, (width - (maxX - minX) * zoom) / 2) - minX * zoom,
+      y: padding + Math.max(0, (height - (maxY - minY) * zoom) / 2) - minY * zoom,
+    };
+    applyViewport();
+  };
+
   const api = useMemo<CanvasApi>(
     () => ({
       getZoom: () => viewport.current.zoom,
@@ -79,6 +114,18 @@ export const BuilderCanvas = () => {
 
   useEffect(() => {
     applyViewport();
+    // Chat bots slightly larger than the screen open fully in view; big ones open at their start, readable.
+    const frame = requestAnimationFrame(() => {
+      const canvas = canvasRef.current;
+      const content = contentRef.current;
+      if (!canvas || !content) return;
+      const bounds = canvas.getBoundingClientRect();
+      const isOverflowing = [...content.querySelectorAll(".group-node, .start-node")].some((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.right > bounds.right || rect.bottom > bounds.bottom || rect.left < bounds.left || rect.top < bounds.top;
+      });
+      if (isOverflowing) fitView(0.6);
+    });
     const canvas = canvasRef.current!;
     // Wheel pans; Ctrl/⌘ + wheel (and trackpad pinch) zooms. Non-passive to prevent page scroll.
     const onWheel = (event: WheelEvent) => {
@@ -88,7 +135,10 @@ export const BuilderCanvas = () => {
       applyViewport();
     };
     canvas.addEventListener("wheel", onWheel, { passive: false });
-    return () => canvas.removeEventListener("wheel", onWheel);
+    return () => {
+      cancelAnimationFrame(frame);
+      canvas.removeEventListener("wheel", onWheel);
+    };
   }, []); // once: the handlers only use refs
 
   const startPan = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -158,15 +208,8 @@ export const BuilderCanvas = () => {
           <button type="button" className="btn btn--sm" onClick={() => zoomAt(1 / 1.2)} aria-label="Zoom out">
             −
           </button>
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={() => {
-              viewport.current = initialViewport(store.getState().chatBot.events[0]?.graphCoordinates);
-              applyViewport();
-            }}
-          >
-            Reset view
+          <button type="button" className="btn btn--sm" onClick={() => fitView()} title="Show the whole chat bot">
+            Fit view
           </button>
         </div>
         {groupIds.length === 0 && <p className="canvas__hint">Drag a block from the left panel onto the canvas to start.</p>}

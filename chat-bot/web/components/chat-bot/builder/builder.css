@@ -35,11 +35,23 @@
   gap: var(--app-space-2);
   min-width: 0;
 }
+/* The actions (Save, Test, Web Chat, Publish) never shrink or get cut off; the name field gives way. */
+.toolbar__group:first-child {
+  flex: 1 1 auto;
+}
+.toolbar__group:last-child {
+  flex-shrink: 0;
+}
 .toolbar__name {
+  flex: 0 1 240px;
   width: 240px;
+  min-width: 90px;
   font-weight: 600;
 }
 .toolbar__save-state {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--app-text-muted);
   font-size: var(--app-font-size-sm);
   white-space: nowrap;
@@ -574,5 +586,38 @@
   .webchat-designer {
     grid-template-columns: 1fr;
     height: auto;
+  }
+}
+/* Keeps the Test panel mounted (conversation kept) while an editor is shown instead. */
+.builder__test-slot {
+  display: contents;
+}
+.builder__test-slot[hidden] {
+  display: none;
+}
+
+/* Narrow screens and embedded iframes: compact toolbar and side panels. */
+@media (max-width: 1100px) {
+  .toolbar__save-state {
+    display: none;
+  }
+  .toolbar .btn {
+    padding: 0 var(--app-space-2);
+  }
+}
+@media (max-width: 960px) {
+  :root {
+    --builder-sidebar-width: 170px;
+    --builder-inspector-width: 280px;
+  }
+  .test-panel {
+    width: 300px;
+  }
+  .toolbar {
+    gap: var(--app-space-2);
+    padding: 0 var(--app-space-2);
+  }
+  .toolbar .badge {
+    display: none;
   }
 }

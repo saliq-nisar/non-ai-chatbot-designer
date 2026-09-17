@@ -1,7 +1,7 @@
 /**
  * Web Chat appearance and behavior, edited in the builder (Web Chat designer) and saved in
  * the chat bot's settings (`settings.webChat`). The Web Chat script loads it from
- * GET /api/v1/typebots/{publicId}/webChat, so changes reach websites without new code.
+ * GET /api/v1/chat-bots/{publicId}/webChat, so changes reach websites without new code.
  * widget/webChat.ts mirrors this shape (it cannot import files).
  */
 export type WebChatConfig = {

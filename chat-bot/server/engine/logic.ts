@@ -1,3 +1,4 @@
+import { CHAT_BOT_LINK_TYPE } from "../../shared/blockTypes.js";
 import { createId } from "../../shared/createId.js";
 import type { Block, ClientSideAction, Variable } from "../../shared/types.js";
 import { type Condition, executeCondition } from "./conditions.js";
@@ -30,7 +31,7 @@ export const LOGIC_TYPES = new Set([
   "Jump",
   "AB test",
   "Code",
-  "Typebot link",
+  CHAT_BOT_LINK_TYPE,
   "Return",
   "Google Analytics",
   "Pixel",
@@ -236,8 +237,8 @@ export const executeLogic = (block: Block, state: SessionState, flow: Flow): Log
     case "Return":
       return { jump: "return" };
 
-    case "Typebot link": {
-      const linked = option<string>(block, "typebotId");
+    case CHAT_BOT_LINK_TYPE: {
+      const linked = option<string>(block, "chatBotId");
       if (!linked) return {};
       const chatBotId = linked === "current" ? flow.chatBotId : linked;
       return { jump: { linkChatBotId: chatBotId, groupId: option<string>(block, "groupId"), mergeVariables: option<boolean>(block, "mergeResults") === true } };

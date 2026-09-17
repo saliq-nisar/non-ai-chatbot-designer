@@ -38,6 +38,9 @@ export const CredentialsSelect = ({ type, value, onChange, blockId, defaultOptio
     // Reloads only when the account type changes.
   }, [type]);
 
+  // Embedded builder: Google sign-in can't run inside an iframe, and removing accounts needs the real sign-in.
+  const isEmbedded = !!appConfig.embedToken;
+
   const connectGoogle = () => {
     const returnTo = `${routes.builder(chatBotId)}?blockId=${encodeURIComponent(blockId)}`;
     window.location.assign(credentialsApi.oauthUrl(appConfig.workspaceId, type, returnTo));
@@ -70,21 +73,26 @@ export const CredentialsSelect = ({ type, value, onChange, blockId, defaultOptio
           ))}
         </select>
         {credentialsApi.isOAuth(type) ? (
-          <button type="button" className="btn btn--sm" onClick={connectGoogle} disabled={isDirty} title={isDirty ? "Save your changes first" : undefined}>
-            Connect
-          </button>
+          !isEmbedded && (
+            <button type="button" className="btn btn--sm" onClick={connectGoogle} disabled={isDirty} title={isDirty ? "Save your changes first" : undefined}>
+              Connect
+            </button>
+          )
         ) : (
           <button type="button" className="btn btn--sm" onClick={() => setIsAdding(true)}>
             Add
           </button>
         )}
-        {value && value !== defaultOption?.value && (
+        {value && value !== defaultOption?.value && !isEmbedded && (
           <button type="button" className="btn btn--ghost btn--sm" onClick={remove} aria-label="Remove account">
             ✕
           </button>
         )}
       </div>
-      {credentialsApi.isOAuth(type) && isDirty && <span className="field__hint">Save your changes before connecting a Google account.</span>}
+      {credentialsApi.isOAuth(type) && isEmbedded && (
+        <span className="field__hint">Google accounts are connected in the Chat Bots app; accounts connected there can be selected here.</span>
+      )}
+      {credentialsApi.isOAuth(type) && isDirty && !isEmbedded && <span className="field__hint">Save your changes before connecting a Google account.</span>}
       {error && <span className="field__hint alert">{error}</span>}
       {isAdding && (
         <AddCredentialsDialog

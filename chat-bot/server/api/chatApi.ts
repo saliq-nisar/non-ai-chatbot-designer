@@ -1,8 +1,10 @@
 import type { IncomingMessage } from "node:http";
+import { CHAT_BOT_LINK_TYPE } from "../../shared/blockTypes.js";
 import { createId } from "../../shared/createId.js";
 import { resolveWebChatConfig } from "../../shared/webChat.js";
-import type { ChatBubble } from "../../shared/types.js";
-import { findPublishedChatBots, findRunnableChatBot, type PublishedRow } from "../db/chatBots.js";
+import type { ChatBot, ChatBubble } from "../../shared/types.js";
+import { config } from "../config.js";
+import { findChatBot, findPublishedChatBots, findRunnableChatBot, type PublishedRow } from "../db/chatBots.js";
 import * as conversations from "../db/conversations.js";
 import { transaction } from "../db/database.js";
 import { toMarkdownBubble } from "../engine/bubbles.js";
@@ -65,8 +67,8 @@ const expectsReply = (step: StepResult) => !!step.input || step.clientSideAction
 
 const formatMessages = (messages: ChatBubble[], format: unknown) => (format === "markdown" ? messages.map(toMarkdownBubble) : messages);
 
-const toFlow = (row: PublishedRow): Flow => ({
-  chatBotId: row.typebotId,
+const toFlow = (row: Omit<PublishedRow, "id" | "createdAt">): Flow => ({
+  chatBotId: row.chatBotId,
   version: row.version ?? "6",
   groups: row.groups,
   edges: row.edges,
@@ -83,7 +85,7 @@ const loadLinkedFlows = async (root: Flow, workspaceId: string) => {
     const ids = [
       ...new Set(
         pending.flatMap((flow) =>
-          flow.groups.flatMap((group) => group.blocks.filter((block) => block.type === "Typebot link").map((block) => block.options?.typebotId as string | undefined)),
+          flow.groups.flatMap((group) => group.blocks.filter((block) => block.type === CHAT_BOT_LINK_TYPE).map((block) => block.options?.chatBotId as string | undefined)),
         ),
       ),
     ].filter((id): id is string => !!id && id !== "current" && !flows[id]);
@@ -93,6 +95,76 @@ const loadLinkedFlows = async (root: Flow, workspaceId: string) => {
   return flows;
 };
 
+type StartSource = Omit<PublishedRow, "id" | "createdAt">;
+
+/** Creates the conversation state and runs the flow up to the first question (answering it when a message was sent). */
+const runFirstStep = async ({
+  root,
+  message,
+  state,
+}: {
+  root: Flow;
+  message: Reply | undefined;
+  state: Pick<SessionState, "workspaceId" | "publicId" | "publishedChatBotId" | "resultId" | "isTest" | "allowedOrigins">;
+}) => {
+  const initialState: SessionState = {
+    engine: "chat-bot/2",
+    ...state,
+    rootFlowId: root.chatBotId,
+    currentFlowId: root.chatBotId,
+    flows: await loadLinkedFlows(root, state.workspaceId),
+    continuations: [],
+    answers: [],
+    transcript: [],
+  };
+  let step = await startFlow(initialState, engineServices);
+  if (message && expectsReply(step)) {
+    const next = await continueFlow(step.state, message, engineServices);
+    step = {
+      ...next,
+      messages: [...step.messages, ...next.messages],
+      clientSideActions: [...step.clientSideActions, ...next.clientSideActions],
+      logs: [...step.logs, ...next.logs],
+    };
+  }
+  return { sessionId: createId(), step };
+};
+
+const saveFirstStep = (sessionId: string, step: StepResult) =>
+  transaction(async (db) => {
+    await conversations.insertSession(db, sessionId, step.state);
+    if (step.state.resultId) {
+      await conversations.upsertResult(db, {
+        resultId: step.state.resultId,
+        chatBotId: step.state.rootFlowId,
+        variables: rootFlow(step.state).variables,
+        isCompleted: !expectsReply(step) && step.state.answers.length > 0,
+        hasStarted: step.state.answers.length > 0,
+        sessionId,
+      });
+      await conversations.insertAnswers(db, step.state.resultId, step.answers);
+    }
+  });
+
+const startReply = ({ sessionId, step, source, textBubbleContentFormat }: { sessionId: string; step: StepResult; source: StartSource; textBubbleContentFormat: unknown }) => ({
+  sessionId,
+  resultId: step.state.resultId,
+  chatBot: {
+    id: source.chatBotId,
+    version: source.version,
+    theme: source.theme,
+    settings: { general: source.settings.general, typingEmulation: source.settings.typingEmulation },
+    publishedAt: source.updatedAt.toISOString(),
+  },
+  // The visitor can write to a live agent after the flow only when messages are delivered somewhere.
+  isLiveAgentEnabled: !!config.chatWebhookUrl,
+  messages: formatMessages(step.messages, textBubbleContentFormat),
+  input: step.input,
+  clientSideActions: step.clientSideActions.length ? step.clientSideActions : undefined,
+  lastMessageNewFormat: step.lastMessageNewFormat,
+  logs: logsForResponse(step),
+});
+
 /** Execution logs are returned to the Test panel only. */
 const logsForResponse = (step: StepResult) => (step.state.isTest && step.logs.length ? step.logs : undefined);
 
@@ -100,7 +172,7 @@ export const chatApiRoutes: Route[] = [
   /** Web Chat look & behavior of a published chat bot (loaded by the Web Chat script). */
   {
     method: "GET",
-    pattern: /^\/api\/v1\/typebots\/([\w.-]+)\/webChat$/,
+    pattern: /^\/api\/v1\/chat-bots\/([\w.-]+)\/webChat$/,
     handler: async ({ res, params }) => {
       const published = await findRunnableChatBot(params[0]!);
       if (!published || published.isArchived) throw notFound("Chat bot not found");
@@ -110,7 +182,7 @@ export const chatApiRoutes: Route[] = [
 
   {
     method: "POST",
-    pattern: /^\/api\/v1\/typebots\/([\w.-]+)\/startChat$/,
+    pattern: /^\/api\/v1\/chat-bots\/([\w.-]+)\/startChat$/,
     handler: async ({ req, res, params }) => {
       const publicId = params[0]!;
       const body = await readJsonObject(req);
@@ -134,71 +206,64 @@ export const chatApiRoutes: Route[] = [
 
       const root = toFlow(published);
       root.variables = applyPrefilledVariables(root.variables, prefilled);
-      const sessionId = createId();
-      const initialState: SessionState = {
-        engine: "chat-bot/2",
-        workspaceId: published.workspaceId,
-        publicId,
-        publishedChatBotId: published.id,
-        resultId: isTest ? undefined : createId(),
-        isTest,
-        rootFlowId: root.chatBotId,
-        currentFlowId: root.chatBotId,
-        flows: await loadLinkedFlows(root, published.workspaceId),
-        continuations: [],
-        answers: [],
-        transcript: [],
-        allowedOrigins,
-      };
-
-      let step = await startFlow(initialState, engineServices);
-      if (message && expectsReply(step)) {
-        const next = await continueFlow(step.state, message, engineServices);
-        step = {
-          ...next,
-          messages: [...step.messages, ...next.messages],
-          clientSideActions: [...step.clientSideActions, ...next.clientSideActions],
-          logs: [...step.logs, ...next.logs],
-        };
-      }
+      const { sessionId, step } = await runFirstStep({
+        root,
+        message,
+        state: { workspaceId: published.workspaceId, publicId, publishedChatBotId: published.id, resultId: isTest ? undefined : createId(), isTest, allowedOrigins },
+      });
 
       if (isBrowserChat)
         queueChatWebhook({ ip, userMessage: messageText(message), botMessages: step.messages, resultId: step.state.resultId, publicId, isBotActivated: expectsReply(step) });
 
       assertOriginAllowed(req, allowedOrigins);
 
-      await transaction(async (db) => {
-        await conversations.insertSession(db, sessionId, step.state);
-        if (step.state.resultId) {
-          await conversations.upsertResult(db, {
-            resultId: step.state.resultId,
-            chatBotId: step.state.rootFlowId,
-            variables: rootFlow(step.state).variables,
-            isCompleted: !expectsReply(step) && step.state.answers.length > 0,
-            hasStarted: step.state.answers.length > 0,
-            sessionId,
-          });
-          await conversations.insertAnswers(db, step.state.resultId, step.answers);
-        }
-      });
+      await saveFirstStep(sessionId, step);
 
       sendJson(res, 200, {
-        sessionId,
-        resultId: step.state.resultId,
+        ...startReply({ sessionId, step, source: published, textBubbleContentFormat: body.textBubbleContentFormat }),
         ...(isBrowserChat && step.state.resultId ? createLiveAgentConnection(step.state.resultId) : {}),
-        typebot: {
-          id: published.typebotId,
-          version: published.version,
-          theme: published.theme,
-          settings: { general: published.settings.general, typingEmulation: published.settings.typingEmulation },
-          publishedAt: published.updatedAt.toISOString(),
-        },
-        messages: formatMessages(step.messages, body.textBubbleContentFormat),
-        input: step.input,
-        clientSideActions: step.clientSideActions.length ? step.clientSideActions : undefined,
-        lastMessageNewFormat: step.lastMessageNewFormat,
-        logs: logsForResponse(step),
       });
+    },
+  },
+
+  /**
+   * Builder Test panel (signed-in only): runs the chat bot as currently shown in the editor —
+   * unsaved and unpublished changes included (`chatBot` in the body). Nothing is recorded,
+   * and no webhook, contact save, email or live-agent connection happens.
+   */
+  {
+    method: "POST",
+    pattern: /^\/api\/v1\/chat-bots\/([\w-]+)\/preview\/startChat$/,
+    requiresAuth: true,
+    handler: async ({ req, res, params }) => {
+      const body = await readJsonObject(req);
+      const message = readMessage(body.message);
+      const saved = await findChatBot(params[0]!);
+      if (!saved) throw notFound("Chat bot not found");
+      const draft = isObject(body.chatBot) ? body.chatBot : {};
+      const pick = <K extends keyof ChatBot>(key: K): ChatBot[K] => (draft[key as string] !== undefined ? (draft[key as string] as ChatBot[K]) : saved[key]);
+      if (![pick("groups"), pick("edges"), pick("events"), pick("variables")].every(Array.isArray)) throw badRequest("Invalid chat bot");
+
+      const source = {
+        chatBotId: saved.id,
+        version: saved.version,
+        groups: pick("groups"),
+        edges: pick("edges"),
+        events: pick("events"),
+        variables: pick("variables"),
+        theme: pick("theme") ?? {},
+        settings: pick("settings") ?? {},
+        updatedAt: new Date(),
+      };
+      const root = toFlow(source);
+      root.variables = applyPrefilledVariables(root.variables, isObject(body.prefilledVariables) ? body.prefilledVariables : {});
+      const { sessionId, step } = await runFirstStep({
+        root,
+        message,
+        state: { workspaceId: saved.workspaceId, publicId: saved.publicId ?? undefined, resultId: undefined, isTest: true },
+      });
+      await saveFirstStep(sessionId, step);
+      sendJson(res, 200, startReply({ sessionId, step, source, textBubbleContentFormat: body.textBubbleContentFormat }));
     },
   },
 
@@ -248,6 +313,9 @@ export const chatApiRoutes: Route[] = [
       });
 
       sendJson(res, 200, {
+        // Same ids as in startChat. resultId is the live-agent room (room:{resultId}_web); absent for test conversations.
+        sessionId,
+        resultId: step.state.resultId,
         messages: formatMessages(step.messages, body.textBubbleContentFormat),
         input: step.input,
         clientSideActions: step.clientSideActions.length ? step.clientSideActions : undefined,

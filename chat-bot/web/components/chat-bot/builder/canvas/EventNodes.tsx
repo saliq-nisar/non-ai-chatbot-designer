@@ -29,6 +29,7 @@ const EventNode = memo(({ eventId }: { eventId: string }) => {
   return (
     <div
       className={`start-node${event.type === "start" ? "" : " start-node--event"}${isSelected ? " is-selected" : ""}`}
+      data-event-id={event.id}
       style={{ transform: `translate(${event.graphCoordinates.x}px, ${event.graphCoordinates.y}px)` }}
       onPointerDown={startDrag}
     >

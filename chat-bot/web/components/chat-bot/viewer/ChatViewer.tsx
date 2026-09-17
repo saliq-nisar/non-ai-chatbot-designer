@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { ChatContext } from "../../../api/chatApi";
 import { toCssVariables } from "../../../theme/chatAppearance";
 import { useChatSession, useChatState } from "../runtime/useChatSession";
@@ -8,7 +8,7 @@ import { MessageList } from "./MessageList";
 import "./chat.css";
 
 type Props = {
-  /** Public ID of a published chat bot. */
+  /** Public ID of a published chat bot (not used by the builder preview context). */
   publicId: string;
   /** "test" for the builder's Test panel; live conversations also pass the embedding site. */
   context: ChatContext;
@@ -24,7 +24,13 @@ export type ChatHeader = { title: string; subtitle?: string; avatarUrl?: string;
  * The chat UI. Used by the standalone chat page, the builder's Test panel and the
  * Web Chat iframe. To start a new conversation, remount it with a different `key`.
  */
-export const ChatViewer = ({ publicId, context, header, onClose }: Props) => {
+export const ChatViewer = (props: Props) => {
+  // Remounting with a new key starts a new conversation (after an unrecoverable error).
+  const [conversation, setConversation] = useState(0);
+  return <Conversation key={conversation} {...props} onRestart={() => setConversation((n) => n + 1)} />;
+};
+
+const Conversation = ({ publicId, context, header, onClose, onRestart }: Props & { onRestart: () => void }) => {
   const session = useChatSession(publicId, context);
   const appearance = useChatState(session, (state) => state.appearance);
   const progress = useChatState(session, (state) => state.progress);
@@ -46,13 +52,19 @@ export const ChatViewer = ({ publicId, context, header, onClose }: Props) => {
           )}
         </header>
       )}
+      {!header && onClose && (
+        // Web Chat without a header: full-screen on phones still needs a way out.
+        <button type="button" className="chat__close chat__close--floating" onClick={onClose} aria-label={chatText.close}>
+          ✕
+        </button>
+      )}
       {progress !== undefined && (
         <div className="chat__progress" role="progressbar" aria-valuenow={progress}>
           <div style={{ width: `${progress}%` }} />
         </div>
       )}
       <MessageList session={session} />
-      <ChatInputArea session={session} />
+      <ChatInputArea session={session} onRestart={onRestart} />
     </div>
   );
 };

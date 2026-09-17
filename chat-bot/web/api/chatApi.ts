@@ -14,26 +14,29 @@ import type { ChatMessage, ChatReply, StartChatReply } from "./types";
 const TEXT_FORMAT = "richText";
 const CHAT_TIMEOUT_MS = 60_000;
 
-export type ChatContext = { mode: "live" | "test"; embedOrigin?: string };
+export type ChatContext =
+  | { mode: "live" | "test"; embedOrigin?: string }
+  /** Builder Test panel: runs the editor's current (unsaved, unpublished) version of the chat bot. */
+  | { mode: "preview"; chatBotId: string; getDraft: () => unknown };
 
-const headersFor = ({ mode, embedOrigin }: ChatContext) => ({
-  ...(mode === "test" ? { "X-Chat-Bot-Mode": "test" } : {}),
-  ...(embedOrigin ? { "X-Chat-Bot-Embed-Origin": embedOrigin } : {}),
+const headersFor = (context: ChatContext) => ({
+  ...(context.mode === "test" ? { "X-Chat-Bot-Mode": "test" } : {}),
+  ...(context.mode !== "preview" && context.embedOrigin ? { "X-Chat-Bot-Embed-Origin": context.embedOrigin } : {}),
 });
-
-// The API names the bot field "typebot"; the app exposes it as "chatBot".
-type StartChatWireReply = Omit<StartChatReply, "chatBot"> & { typebot: StartChatReply["chatBot"] };
 
 export const chatApi = {
   async startChat(publicId: string, context: ChatContext, { signal }: { signal?: AbortSignal } = {}): Promise<StartChatReply> {
-    const { typebot, ...reply } = await request<StartChatWireReply>(`/api/v1/typebots/${encodeURIComponent(publicId)}/startChat`, {
+    const isPreview = context.mode === "preview";
+    const url = isPreview
+      ? `/api/v1/chat-bots/${encodeURIComponent(context.chatBotId)}/preview/startChat`
+      : `/api/v1/chat-bots/${encodeURIComponent(publicId)}/startChat`;
+    return request<StartChatReply>(url, {
       method: "POST",
-      body: { textBubbleContentFormat: TEXT_FORMAT },
+      body: { textBubbleContentFormat: TEXT_FORMAT, ...(isPreview ? { chatBot: context.getDraft() } : {}) },
       headers: headersFor(context),
       signal,
       timeoutMs: CHAT_TIMEOUT_MS,
     });
-    return { ...reply, chatBot: typebot };
   },
 
   /** Relays a visitor message to the live agent (after the flow ended or an agent took over). */

@@ -1,5 +1,5 @@
 import { type ChatContext, chatApi } from "../../../api/chatApi";
-import { errorMessage, isAbortError } from "../../../api/http";
+import { ApiError, errorMessage, isAbortError } from "../../../api/http";
 import type { ChatBubble, ChatInput, ChatReply, ClientSideAction } from "../../../api/types";
 import { type ChatAppearance, defaultChatAppearance, resolveChatAppearance } from "../../../theme/chatAppearance";
 import { executeClientSideAction } from "./clientSideActions";
@@ -25,6 +25,8 @@ export type ChatState = {
   entries: ChatEntry[];
   input?: ChatInput;
   error?: string;
+  /** False when retrying the same request can't help (e.g. the chat bot doesn't exist). */
+  canRetry?: boolean;
   appearance: ChatAppearance;
   progress?: number;
   /**
@@ -47,6 +49,7 @@ export const createChatSession = ({ publicId, context }: { publicId: string; con
 
   let hasStarted = false;
   let sessionId: string | undefined;
+  let isLiveAgentEnabled = false;
   let typing = resolveTyping(undefined);
   let hasShownFirstMessage = false;
   let entryCount = 0;
@@ -56,6 +59,10 @@ export const createChatSession = ({ publicId, context }: { publicId: string; con
     state = { ...state, ...patch };
     for (const listener of listeners) listener();
   };
+
+  // Client errors (not found, closed, invalid) fail the same way again; network/server errors may not.
+  const isRetryable = (error: unknown) =>
+    !(error instanceof ApiError) || error.status === 0 || error.status >= 500 || error.status === 408 || error.status === 409 || error.status === 429;
 
   const nextEntryId = () => `entry-${++entryCount}`;
 
@@ -67,7 +74,7 @@ export const createChatSession = ({ publicId, context }: { publicId: string; con
       } catch (error) {
         if (signal.aborted || isAbortError(error)) throw error;
         const statusBeforeError = state.status;
-        setState({ status: "error", error: errorMessage(error) });
+        setState({ status: "error", error: errorMessage(error), canRetry: isRetryable(error) });
         await new Promise<void>((resolve, reject) => {
           resumeAfterError = resolve;
           signal.addEventListener("abort", () => reject(signal.reason), { once: true });
@@ -123,7 +130,7 @@ export const createChatSession = ({ publicId, context }: { publicId: string; con
       input: reply.input,
       status: reply.input ? "waitingForInput" : "ended",
       // The flow ended: the visitor can keep writing to a live agent.
-      isLiveAgentMode: state.isLiveAgentMode || !reply.input,
+      isLiveAgentMode: state.isLiveAgentMode || (!reply.input && isLiveAgentEnabled),
       ...(reply.progress !== undefined ? { progress: reply.progress } : {}),
     });
   };
@@ -147,6 +154,7 @@ export const createChatSession = ({ publicId, context }: { publicId: string; con
       (async () => {
         const reply = await callApi(() => chatApi.startChat(publicId, context, { signal }));
         sessionId = reply.sessionId;
+        isLiveAgentEnabled = reply.isLiveAgentEnabled === true;
         if (reply.widgetSocketToken && reply.liveAgentSocketHost)
           listenForLiveAgentMessages({
             host: reply.liveAgentSocketHost,

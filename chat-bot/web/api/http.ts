@@ -1,3 +1,8 @@
+import { appConfig } from "../config";
+
+/** Embedded builder: the signed embed token authorizes API calls (third-party iframes get no cookies). */
+export const authHeaders = (): Record<string, string> => (appConfig.embedToken ? { "X-Chat-Bot-Embed-Token": appConfig.embedToken } : {});
+
 /**
  * The one place HTTP requests are made. Handles JSON, timeouts, cancellation,
  * error normalization and de-duplication of identical in-flight GET requests.
@@ -43,7 +48,7 @@ const send = async <T>(url: string, { method = "GET", body, headers, signal, tim
   try {
     response = await fetch(url, {
       method,
-      headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...headers },
+      headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...authHeaders(), ...headers },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     });
@@ -61,6 +66,9 @@ const send = async <T>(url: string, { method = "GET", body, headers, signal, tim
   }
 
   if (!response.ok) {
+    if (response.status === 401 && url.startsWith("/api/v1/") && appConfig.embedToken) {
+      throw new ApiError("Your editing session has expired. Reload the page to continue.", 401);
+    }
     if (response.status === 401 && url.startsWith("/api/v1/")) {
       window.location.assign(`/login?returnTo=${encodeURIComponent(window.location.pathname)}`);
     }

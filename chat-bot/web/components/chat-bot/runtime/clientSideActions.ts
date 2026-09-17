@@ -28,12 +28,13 @@ export const executeClientSideAction = async (action: ClientSideAction, { signal
       const url = action.redirect?.url;
       if (!url || !/^https?:\/\//i.test(url)) return;
       // "_top" also leaves the Web Chat iframe and navigates the host page.
-      window.open(url, action.redirect?.isNewTab ? "_blank" : "_top", "noopener");
+      // The builder's Test panel always uses a new tab so the editor stays open.
+      window.open(url, action.redirect?.isNewTab || context.mode === "preview" ? "_blank" : "_top", "noopener");
       return;
     }
     case "scriptToExecute": {
       if (!action.scriptToExecute) return;
-      if (action.shouldExecuteInParentContext && context.embedOrigin && window.parent !== window) {
+      if (action.shouldExecuteInParentContext && context.mode !== "preview" && context.embedOrigin && window.parent !== window) {
         window.parent.postMessage({ type: "chat-bot:execute", script: action.scriptToExecute }, context.embedOrigin);
         return;
       }

@@ -16,6 +16,7 @@ export const chatText = {
   typing: "Typing…",
   restart: "Restart",
   retry: "Retry",
+  unavailable: "This chat isn't available right now.",
   unsupportedInput: "This question can't be answered in this chat window.",
   close: "Close chat",
   liveAgentPlaceholder: "Type your message...",

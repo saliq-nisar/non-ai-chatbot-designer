@@ -9,7 +9,7 @@ What you will run:
 | `chat-bot` | Web app (builder, chat pages, Web Chat script), REST API, flow engine | 1 (more possible, see §13) |
 | `chat-bot-webhook-worker` | Sends queued chat messages to `CHAT_WEBHOOK_URL` | **Exactly 1** |
 
-Plus: PostgreSQL (existing database can be reused), Redis, Nginx (HTTPS reverse proxy), PM2 (process manager).
+Plus: PostgreSQL (a new, empty database), Redis, Nginx (HTTPS reverse proxy), PM2 (process manager).
 
 ```
 Internet ──HTTPS──► Nginx :443 ──► chat-bot :3002 ──► PostgreSQL
@@ -61,9 +61,9 @@ Keep Redis private: in `/etc/redis/redis.conf` make sure `bind 127.0.0.1 -::1` a
 
 ### 1.5 PostgreSQL
 
-**Reusing the existing database** (the one the previous system used): nothing to install — just have its connection string ready. The app only adds missing tables; existing chat bots, results and credentials keep working.
+The app needs its **own, new database** (it does not use the previous system's tables).
 
-**New database on this server:**
+**On this server:**
 
 ```bash
 sudo apt-get install -y postgresql
@@ -185,7 +185,7 @@ NEXT_PUBLIC_BOT_FILE_UPLOAD_MAX_SIZE=10
 
 Important:
 
-- **Moving from the previous system?** Copy these values from its `.env` unchanged: `DATABASE_URL`, `ADMIN_EMAIL`, `ENCRYPTION_SECRET`, `WIDGET_JWT_SECRET`, `CHAT_WEBHOOK_URL`, `SAVE_WEBCHAT_CONTACT_URL`, `NEXT_PUBLIC_LIVE_AGENT_SOCKET_HOST`. A different `ENCRYPTION_SECRET` makes saved accounts (SMTP, Stripe, Google) unreadable; a different `WIDGET_JWT_SECRET` breaks live-agent messages.
+- **Moving from the previous system?** Use a **new** `DATABASE_URL`. You can copy these values from its `.env`: `ADMIN_EMAIL`, `ENCRYPTION_SECRET`, `WIDGET_JWT_SECRET`, `CHAT_WEBHOOK_URL`, `SAVE_WEBCHAT_CONTACT_URL`, `NEXT_PUBLIC_LIVE_AGENT_SOCKET_HOST`. A different `ENCRYPTION_SECRET` makes saved accounts (SMTP, Stripe, Google) unreadable; a different `WIDGET_JWT_SECRET` breaks live-agent messages.
 - `ENCRYPTION_SECRET` must never change after accounts are saved. Store it in your password manager.
 - `CHAT_BOT_PUBLIC_URL` must be the exact public `https://` address — it is used in the Web Chat install code, upload URLs, Google sign-in redirect and secure cookies.
 - Leave `CHAT_WEBHOOK_URL` empty to disable the webhook (then the worker isn't needed).
@@ -335,7 +335,7 @@ Expected worker startup line:
 Checklist:
 
 1. Open `https://chat.example.com` → sign in with `LOGIN_USERNAME` / `LOGIN_PASSWORD`.
-2. Existing chat bots are listed (when reusing the database).
+2. The chat bot list opens (empty on a new database) and **Create chat bot** works.
 3. Open a bot → **Test** works.
 4. **Publish** → **Web Chat** → copy the install code into a test page → launcher appears and the chat runs.
 5. Send a message in that Web Chat → worker log prints `job N sent`.
@@ -345,24 +345,24 @@ Checklist:
 
 ## 11. Moving from the previous system (bot-node)
 
-The new app uses the same database tables, the same `chat-webhook` Redis queue, the same webhook/contact payloads and the same live-agent token, and keeps the API paths (`/api/v1/typebots/{publicId}/startChat`, `/api/v1/sessions/{id}/continueChat`).
+The new app uses its **own new database**, the same `chat-webhook` Redis queue, the same webhook/contact payloads and the same live-agent token. Its API paths are `/api/v1/chat-bots/...` and `/api/v1/sessions/...`; anything that called the previous system's API must be updated.
 
-1. Back up the database (§14).
-2. Deploy the new app (§2–§7) using the **same** `DATABASE_URL`, `ENCRYPTION_SECRET`, `WIDGET_JWT_SECRET` and integration URLs.
-3. Stop the old processes — **never run two webhook workers on the same Redis queue** (messages would be split between them and delivered out of order):
+1. Create a new PostgreSQL database (§1.5).
+2. Deploy the new app (§2–§7) with the new `DATABASE_URL` and the same `WIDGET_JWT_SECRET` and integration URLs.
+3. Recreate the chat bots in the new app (from templates or by importing exports), publish them, and re-add SMTP/Stripe/Google accounts.
+4. Stop the old processes — **never run two webhook workers on the same Redis queue** (messages would be split between them and delivered out of order):
    ```bash
    pm2 list                        # find the old app names
    pm2 stop <old-viewer> <old-builder> <old-webhook-worker>
    pm2 delete <old-viewer> <old-builder> <old-webhook-worker>
    pm2 save
    ```
-4. Point the domain/Nginx to the new app.
-5. **Websites already using the old embed code must switch to the new Web Chat code** (Builder → Web Chat → copy code):
+5. Point the domain/Nginx to the new app.
+6. **Websites already using the old embed code must switch to the new Web Chat code** (Builder → Web Chat → copy code):
    ```html
    <script src="https://chat.example.com/web-chat.js" data-chat-bot-id="PUBLIC_ID" async></script>
    ```
-6. Conversations that were in progress in the old system can't be continued (visitors simply start a new chat). Results and published bots are kept.
-7. Copy uploaded files the old system stored elsewhere if you still need them.
+7. Public IDs of recreated chat bots may differ: use the new install code for each website. Old conversations and results stay in the old database.
 
 ---
 

@@ -33,7 +33,7 @@ export const upsertResult = (
     .filter((variable) => !variable.isSessionVariable && variable.value !== null && variable.value !== undefined)
     .map(({ id, name, value }) => ({ id, name, value }));
   return db.query(
-    `INSERT INTO "Result" ("id", "typebotId", "variables", "isCompleted", "hasStarted", "lastChatSessionId")
+    `INSERT INTO "Result" ("id", "chatBotId", "variables", "isCompleted", "hasStarted", "lastChatSessionId")
      VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT ("id") DO UPDATE SET "variables" = EXCLUDED."variables", "hasStarted" = EXCLUDED."hasStarted",
        "isCompleted" = "Result"."isCompleted" OR EXCLUDED."isCompleted", "lastChatSessionId" = EXCLUDED."lastChatSessionId"`,
@@ -53,7 +53,7 @@ export const insertAnswers = async (db: pg.PoolClient, resultId: string, answers
 export const findResultBySessionId = async (sessionId: string) =>
   (
     await query<{ id: string; publicId: string | null }>(
-      `SELECT r."id", t."publicId" FROM "Result" r JOIN "Typebot" t ON t."id" = r."typebotId" WHERE r."lastChatSessionId" = $1 LIMIT 1`,
+      `SELECT r."id", t."publicId" FROM "Result" r JOIN "ChatBot" t ON t."id" = r."chatBotId" WHERE r."lastChatSessionId" = $1 LIMIT 1`,
       [sessionId],
     )
   )[0];

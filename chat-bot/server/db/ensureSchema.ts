@@ -5,9 +5,8 @@ import { pool } from "./database.js";
  * (fresh database). Existing databases are left untouched: every statement is
  * IF NOT EXISTS, so running it on each start is safe.
  *
- * Tables keep the names of the existing database so its data is reused:
- *   "Typebot" = chat bots · "PublicTypebot" = published versions · "Result" / "AnswerV2" =
- *   conversations and answers · "ChatSession" = live chat state.
+ * Tables: "ChatBot" = chat bots · "PublishedChatBot" = their published versions ·
+ *   "Result" / "AnswerV2" = conversations and answers · "ChatSession" = live chat state.
  */
 const SCHEMA_SQL = `
 DO $$ BEGIN
@@ -52,7 +51,7 @@ CREATE TABLE IF NOT EXISTS "MemberInWorkspace" (
   UNIQUE ("userId", "workspaceId")
 );
 
-CREATE TABLE IF NOT EXISTS "Typebot" (
+CREATE TABLE IF NOT EXISTS "ChatBot" (
   "id" TEXT PRIMARY KEY,
   "version" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -76,14 +75,14 @@ CREATE TABLE IF NOT EXISTS "Typebot" (
   "whatsAppCredentialsId" TEXT,
   "riskLevel" INTEGER
 );
-CREATE INDEX IF NOT EXISTS "Typebot_workspaceId_idx" ON "Typebot"("workspaceId");
+CREATE INDEX IF NOT EXISTS "ChatBot_workspaceId_idx" ON "ChatBot"("workspaceId");
 
-CREATE TABLE IF NOT EXISTS "PublicTypebot" (
+CREATE TABLE IF NOT EXISTS "PublishedChatBot" (
   "id" TEXT PRIMARY KEY,
   "version" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "typebotId" TEXT NOT NULL UNIQUE REFERENCES "Typebot"("id") ON DELETE CASCADE,
+  "chatBotId" TEXT NOT NULL UNIQUE REFERENCES "ChatBot"("id") ON DELETE CASCADE,
   "groups" JSONB NOT NULL,
   "events" JSONB,
   "variables" JSONB NOT NULL,
@@ -95,7 +94,7 @@ CREATE TABLE IF NOT EXISTS "PublicTypebot" (
 CREATE TABLE IF NOT EXISTS "Result" (
   "id" TEXT PRIMARY KEY,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "typebotId" TEXT NOT NULL REFERENCES "Typebot"("id") ON DELETE CASCADE,
+  "chatBotId" TEXT NOT NULL REFERENCES "ChatBot"("id") ON DELETE CASCADE,
   "variables" JSONB NOT NULL,
   "isCompleted" BOOLEAN NOT NULL,
   "hasStarted" BOOLEAN,

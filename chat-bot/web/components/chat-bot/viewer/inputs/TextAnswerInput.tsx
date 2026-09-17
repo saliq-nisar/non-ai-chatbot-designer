@@ -39,7 +39,8 @@ export const TextAnswerInput = ({ input, onAnswer }: InputProps) => {
   };
 
   return (
-    <form className="chat__answer" onSubmit={submit}>
+    // noValidate: answers are validated by the chat bot, which shows its own (configurable) retry message.
+    <form className="chat__answer" onSubmit={submit} noValidate>
       {isLong ? (
         <textarea
           {...common}
