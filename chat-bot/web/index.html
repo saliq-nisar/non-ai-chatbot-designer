@@ -9,6 +9,13 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Cline x1='32' y1='10' x2='32' y2='18' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='9' r='3.5' fill='%23fff'/%3E%3Crect x='9' y='29' width='5' height='12' rx='2.5' fill='%23fff'/%3E%3Crect x='50' y='29' width='5' height='12' rx='2.5' fill='%23fff'/%3E%3Crect x='14' y='18' width='36' height='34' rx='9' fill='%23fff'/%3E%3Ccircle cx='24.5' cy='32' r='4.5' fill='%232563eb'/%3E%3Ccircle cx='39.5' cy='32' r='4.5' fill='%232563eb'/%3E%3Crect x='24' y='42' width='16' height='3.5' rx='1.75' fill='%232563eb'/%3E%3C/svg%3E"
     />
+    <script>
+      // Applies the saved appearance (light / dark / system) before the page is painted.
+      try {
+        var t = localStorage.getItem("chat-bot-theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-app-theme", t);
+      } catch (e) {}
+    </script>
     <!--chat-bot-config-->
   </head>
   <body>

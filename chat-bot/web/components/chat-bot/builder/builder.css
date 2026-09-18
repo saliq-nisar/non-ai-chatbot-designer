@@ -365,7 +365,7 @@
   fill: var(--app-danger);
 }
 .edge__delete path {
-  stroke: #fff;
+  stroke: var(--app-on-accent);
   stroke-width: 2;
 }
 

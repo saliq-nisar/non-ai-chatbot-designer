@@ -7,6 +7,7 @@ import { ChatBotCard } from "../components/chat-bot/list/ChatBotCard";
 import { CreateChatBotDialog } from "../components/chat-bot/list/CreateChatBotDialog";
 import { ImportChatBotDialog } from "../components/chat-bot/list/ImportChatBotDialog";
 import { ConfirmDialog } from "../components/chat-bot/shared/ConfirmDialog";
+import { ThemeToggle } from "../components/chat-bot/shared/ThemeToggle";
 import { Spinner } from "../components/chat-bot/shared/Spinner";
 import "./pages.css";
 
@@ -41,6 +42,7 @@ const ChatBotListPage = () => {
       <header className="page__header">
         <h1 className="page__title">Chat Bots</h1>
         <div className="page__actions">
+          <ThemeToggle compact />
           <button type="button" className="btn" onClick={() => setDialog({ kind: "import" })}>
             Import
           </button>

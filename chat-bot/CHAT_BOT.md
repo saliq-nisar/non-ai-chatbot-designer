@@ -303,13 +303,20 @@ If the parent page sets `<meta name="referrer" content="no-referrer">` (or `refe
 | Chat CSS | `viewer/chat.css` (`--chat-*` variables) |
 | Chat texts | `viewer/chatText.ts` |
 | Bubble / input rendering | `viewer/BotBubble.tsx`, `viewer/inputs/ChatInputArea.tsx` (`inputRenderers`) |
-| App/builder look | `web/theme/app.css` |
+| App/builder look (light + dark palettes) | `web/theme/app.css` |
+| Default appearance / adding a mode | `web/theme/appTheme.ts`, switch in `components/chat-bot/shared/ThemeToggle.tsx` |
 | Blocks (palette, defaults, summaries, editors) | `builder/blocks/blockRegistry.tsx` + `blocks/editors/` |
 | Events | `eventDefinitions` in `blockRegistry.tsx`, handling in `server/engine/flow.ts` |
 | Templates | `web/templates/` |
 | Engine rules | `server/engine/*`; integrations `server/integrations/*` |
 
 New block end-to-end: registry entry + editor → engine (`INPUT_TYPES`/`LOGIC_TYPES` + `executeLogic`, or `INTEGRATION_TYPES` + `engineServices`) → input renderer if it's an input.
+
+### Appearance (light / dark / system)
+
+The sign-in page, chat bot list and builder have a **Light / Dark / System** switch (top right; on the sign-in page under the button). **System** follows the device setting and is the default. The choice is kept in that browser (`localStorage` key `chat-bot-theme`) and applied before the page is painted, so there is no flash of the wrong palette.
+
+Chat bots keep their own colors: the chat window uses the Theme tab of each chat bot, on every page and in the Web Chat, whatever the app appearance is.
 
 ## 19. Troubleshooting
 

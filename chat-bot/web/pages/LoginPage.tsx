@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from "react";
 import { errorMessage, request } from "../api/http";
+import { ThemeToggle } from "../components/chat-bot/shared/ThemeToggle";
 import "./pages.css";
 
 const LoginPage = () => {
@@ -46,6 +47,7 @@ const LoginPage = () => {
         <button type="submit" className="btn btn--primary" disabled={isBusy} style={{ width: "100%" }}>
           {isBusy ? "Signing in…" : "Sign in"}
         </button>
+        <ThemeToggle />
       </form>
     </div>
   );

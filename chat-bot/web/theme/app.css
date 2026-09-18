@@ -1,6 +1,9 @@
 /*
  * App design tokens — customize the list page, dialogs and builder here.
  * Chat appearance lives in theme/chatAppearance.ts (per chat bot).
+ *
+ * Light is the default. Dark values are below: they apply when the user picked
+ * "Dark" (html[data-app-theme="dark"]) or picked "System" while the device is dark.
  */
 :root {
   /* colors */
@@ -14,6 +17,15 @@
   --app-primary-hover: #1d4ed8;
   --app-primary-text: #ffffff;
   --app-danger: #dc2626;
+  --app-danger-bg: #fef2f2;
+  --app-danger-border: #fecaca;
+  --app-info: #1e40af;
+  --app-info-bg: #eff6ff;
+  --app-info-border: #bfdbfe;
+  --app-code-bg: #0f172a;
+  --app-code-text: #e2e8f0;
+  --app-backdrop: rgb(15 23 42 / 45%);
+  --app-on-accent: #ffffff;
   --app-danger-hover: #b91c1c;
   --app-success: #15803d;
   --app-success-bg: #dcfce7;
@@ -59,6 +71,94 @@
   --builder-category-integrations: #10b981;
   --builder-category-events: #eab308;
   --builder-category-other: #64748b;
+
+  color-scheme: light;
+}
+
+/* ---- dark theme ---- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-app-theme="light"]) {
+    color-scheme: dark;
+
+    --app-bg: #0f1115;
+    --app-surface: #171a21;
+    --app-surface-muted: #1f232c;
+    --app-border: #2c313c;
+    --app-text: #e6e8ec;
+    --app-text-muted: #9aa3b2;
+    --app-primary: #4b82f7;
+    --app-primary-hover: #6d9bff;
+    --app-primary-text: #ffffff;
+    --app-danger: #f87171;
+    --app-danger-hover: #ef4444;
+    --app-danger-bg: #2a1417;
+    --app-danger-border: #5b2326;
+    --app-success: #4ade80;
+    --app-success-bg: #10281a;
+    --app-draft: #fbbf24;
+    --app-draft-bg: #2b2110;
+    --app-focus: #4b82f7;
+    --app-info: #bfdbfe;
+    --app-info-bg: #14233d;
+    --app-info-border: #1e3a6b;
+    --app-code-bg: #0b0e13;
+    --app-code-text: #d7dce5;
+    --app-backdrop: rgb(0 0 0 / 60%);
+    --app-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 12px rgb(0 0 0 / 35%);
+    --app-shadow-lg: 0 12px 40px rgb(0 0 0 / 55%);
+
+    --builder-canvas-bg: #12151b;
+    --builder-grid-color: #262b35;
+    --builder-group-bg: #171a21;
+    --builder-group-selected: #4b82f7;
+    --builder-block-bg: #1d212a;
+    --builder-block-selected-bg: #1e2a44;
+    --builder-edge-color: #6b7383;
+    --builder-edge-hover: #6d9bff;
+    --builder-port-color: #6b7383;
+  }
+}
+
+/* The same dark values when the user explicitly chose Dark. */
+:root[data-app-theme="dark"] {
+  color-scheme: dark;
+
+  --app-bg: #0f1115;
+  --app-surface: #171a21;
+  --app-surface-muted: #1f232c;
+  --app-border: #2c313c;
+  --app-text: #e6e8ec;
+  --app-text-muted: #9aa3b2;
+  --app-primary: #4b82f7;
+  --app-primary-hover: #6d9bff;
+  --app-primary-text: #ffffff;
+  --app-danger: #f87171;
+  --app-danger-hover: #ef4444;
+  --app-danger-bg: #2a1417;
+  --app-danger-border: #5b2326;
+  --app-success: #4ade80;
+  --app-success-bg: #10281a;
+  --app-draft: #fbbf24;
+  --app-draft-bg: #2b2110;
+  --app-focus: #4b82f7;
+  --app-info: #bfdbfe;
+  --app-info-bg: #14233d;
+  --app-info-border: #1e3a6b;
+  --app-code-bg: #0b0e13;
+  --app-code-text: #d7dce5;
+  --app-backdrop: rgb(0 0 0 / 60%);
+  --app-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 12px rgb(0 0 0 / 35%);
+  --app-shadow-lg: 0 12px 40px rgb(0 0 0 / 55%);
+
+  --builder-canvas-bg: #12151b;
+  --builder-grid-color: #262b35;
+  --builder-group-bg: #171a21;
+  --builder-group-selected: #4b82f7;
+  --builder-block-bg: #1d212a;
+  --builder-block-selected-bg: #1e2a44;
+  --builder-edge-color: #6b7383;
+  --builder-edge-hover: #6d9bff;
+  --builder-port-color: #6b7383;
 }
 
 *,
@@ -127,7 +227,7 @@ textarea {
 .btn--danger {
   background: var(--app-danger);
   border-color: var(--app-danger);
-  color: #fff;
+  color: var(--app-on-accent);
 }
 .btn--danger:hover:not(:disabled) {
   background: var(--app-danger-hover);
@@ -208,14 +308,14 @@ textarea {
 .alert {
   padding: var(--app-space-3);
   border-radius: var(--app-radius-sm);
-  background: #fef2f2;
+  background: var(--app-danger-bg);
   color: var(--app-danger);
-  border: 1px solid #fecaca;
+  border: 1px solid var(--app-danger-border);
 }
 .alert--info {
-  background: #eff6ff;
-  color: #1e40af;
-  border-color: #bfdbfe;
+  background: var(--app-info-bg);
+  color: var(--app-info);
+  border-color: var(--app-info-border);
 }
 
 .spinner {
@@ -246,7 +346,7 @@ textarea {
   color: var(--app-text);
 }
 .dialog::backdrop {
-  background: rgb(15 23 42 / 45%);
+  background: var(--app-backdrop);
 }
 .dialog__header {
   display: flex;
@@ -272,10 +372,44 @@ textarea {
   margin: 0;
   padding: var(--app-space-3);
   border-radius: var(--app-radius-sm);
-  background: #0f172a;
-  color: #e2e8f0;
+  background: var(--app-code-bg);
+  color: var(--app-code-text);
   font-family: var(--app-font-mono);
   font-size: 12.5px;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+/* ---- appearance switch (light / dark / system) ---- */
+.theme-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-surface-muted);
+}
+.theme-toggle__option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--app-space-2);
+  height: 28px;
+  padding: 0 var(--app-space-2);
+  border: 0;
+  border-radius: calc(var(--app-radius-sm) - 2px);
+  background: transparent;
+  color: var(--app-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theme-toggle__option:hover {
+  color: var(--app-text);
+}
+.theme-toggle__option.is-selected {
+  background: var(--app-surface);
+  color: var(--app-text);
+  box-shadow: var(--app-shadow);
+}
+.theme-toggle__label {
+  font-size: var(--app-font-size-sm);
 }

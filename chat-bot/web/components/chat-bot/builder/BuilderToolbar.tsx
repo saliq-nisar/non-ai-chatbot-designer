@@ -1,4 +1,5 @@
 import { appConfig } from "../../../config";
+import { ThemeToggle } from "../shared/ThemeToggle";
 import { navigate, routes } from "../../../router";
 import { useBuilder, useBuilderDispatch } from "./state/builderStore";
 import type { ChatBotLifecycle } from "./useChatBotLifecycle";
@@ -42,6 +43,7 @@ export const BuilderToolbar = ({ lifecycle, onTest, onWebChat }: Props) => {
       </div>
 
       <div className="toolbar__group">
+        <ThemeToggle compact />
         <button type="button" className="btn btn--ghost" onClick={() => dispatch({ type: "undo" })} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
           ↶
         </button>
